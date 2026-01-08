@@ -4,7 +4,6 @@
 ### Joshua Nelson
 **Major:** Computer Science (Emphasis in Big Data Analytics)  
 **Year:** Junior (Expected Graduation: April 2027)  
-**University:** Grand Canyon University | GPA: 3.79
 
 **Technical Interests:**
 - Cloud Infrastructure & DevOps (AWS Solutions Architect Associate Certified)
@@ -27,7 +26,6 @@
 ### Emma Rogoveanu 
 **Major:** Computer Science (Emphasis in Big Data Analytics)  
 **Year:** Junior (Expected Graduation: April 2026) 
-**University:** Grand Canyon University | GPA: 
 
 **Technical Interests:**
 
