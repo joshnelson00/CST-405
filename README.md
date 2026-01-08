@@ -26,7 +26,7 @@
 
 ### Emma Rogoveanu 
 **Major:** Computer Science (Emphasis in Big Data Analytics)  
-**Year:** Junior (Expected Graduation: April 2026)
+**Year:** Junior (Expected Graduation: April 2026) 
 **University:** Grand Canyon University | GPA: 
 
 **Technical Interests:**
