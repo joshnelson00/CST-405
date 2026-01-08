@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/isac/Desktop/GCU COURSES/CST-405 Compiler Design/Compiler-Project/CST-405/**)",
+      "Bash(perl:*)",
+      "Bash(pip3 install:*)",
+      "Bash(cd:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
