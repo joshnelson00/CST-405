@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
     
     printf("\n");
     printf("╔════════════════════════════════════════════════════════════╗\n");
-    printf("║          MINIMAL C COMPILER - EDUCATIONAL VERSION         ║\n");
+    printf("║          MINIMAL C COMPILER - EDUCATIONAL VERSION          ║\n");
     printf("╚════════════════════════════════════════════════════════════╝\n");
     printf("\n");
     
@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ PHASE 2: ABSTRACT SYNTAX TREE (AST)                      │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
-        printf("│ Tree structure representing the program hierarchy:        │\n");
+        printf("│ Tree structure representing the program hierarchy:       │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
         printAST(root, 0);
         printf("\n");
@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ PHASE 3: INTERMEDIATE CODE GENERATION                    │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
-        printf("│ Three-Address Code (TAC) - simplified instructions:       │\n");
+        printf("│ Three-Address Code (TAC) - simplified instructions:      │\n");
         printf("│ • Each instruction has at most 3 operands                │\n");
         printf("│ • Temporary variables (t0, t1, ...) for expressions      │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
         
         printf("╔════════════════════════════════════════════════════════════╗\n");
         printf("║                  COMPILATION SUCCESSFUL!                   ║\n");
-        printf("║         Run the output file in a MIPS simulator           ║\n");
+        printf("║         Run the output file in a MIPS simulator            ║\n");
         printf("╚════════════════════════════════════════════════════════════╝\n");
     } else {
         printf("✗ Parse failed - check your syntax!\n");

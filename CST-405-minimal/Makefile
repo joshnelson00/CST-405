@@ -8,6 +8,7 @@ OBJS = lex.yy.o parser.tab.o main.o ast.o symtab.o codegen.o tac.o
 
 all: $(TARGET)
 
+# Build the Compiler
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
 
