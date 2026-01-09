@@ -12,9 +12,11 @@
 /* TAC INSTRUCTION TYPES */
 typedef enum {
     TAC_ADD,     /* Addition: result = arg1 + arg2 */
+    TAC_SUBTRACT,
     TAC_ASSIGN,  /* Assignment: result = arg1 */
     TAC_PRINT,   /* Print: print(arg1) */
     TAC_DECL     /* Declaration: declare result */
+    
 } TACOp;
 
 /* TAC INSTRUCTION STRUCTURE */

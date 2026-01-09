@@ -69,8 +69,9 @@ char* generateTACExpr(ASTNode* node) {
             
             if (node->data.binop.op == '+') {
                 appendTAC(createTAC(TAC_ADD, left, right, temp));
+            } else if (node->data.binop.op == '-') {
+                appendTAC(createTAC(TAC_SUBTRACT, left, right, temp));
             }
-            
             return temp;
         }
         
@@ -124,6 +125,10 @@ void printTAC() {
             case TAC_ADD:
                 printf("%s = %s + %s", curr->result, curr->arg1, curr->arg2);
                 printf("     // Add: store result in %s\n", curr->result);
+                break;
+            case TAC_SUBTRACT:
+                printf("%s = %s - %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Subtract: store result in %s\n", curr->result);
                 break;
             case TAC_ASSIGN:
                 printf("%s = %s", curr->result, curr->arg1);
@@ -197,7 +202,43 @@ void optimizeTAC() {
                 }
                 break;
             }
-            
+            case TAC_SUBTRACT: {
+                char* left = curr->arg1;
+                char* right = curr->arg2;
+
+                /* Look up propagated values (most recent wins) */
+                for (int i = valueCount - 1; i >= 0; i--) {
+                    if (strcmp(values[i].var, left) == 0) {
+                        left = values[i].value;
+                        break;
+                    }
+                }
+                for (int i = valueCount - 1; i >= 0; i--) {
+                    if (strcmp(values[i].var, right) == 0) {
+                        right = values[i].value;
+                        break;
+                    }
+                }
+
+                /* Constant folding */
+                if ((isdigit(left[0]) || left[0] == '-') &&
+                    (isdigit(right[0]) || right[0] == '-')) {
+
+                    int result = atoi(left) - atoi(right);
+                    char* resultStr = malloc(20);
+                    sprintf(resultStr, "%d", result);
+
+                    /* Store for propagation */
+                    values[valueCount].var = strdup(curr->result);
+                    values[valueCount].value = resultStr;
+                    valueCount++;
+
+                    newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
+                } else {
+                    newInstr = createTAC(TAC_SUBTRACT, left, right, curr->result);
+                }
+                break;
+            }
             case TAC_ASSIGN: {
                 char* value = curr->arg1;
                 
@@ -256,6 +297,10 @@ void printOptimizedTAC() {
             case TAC_ADD:
                 printf("%s = %s + %s", curr->result, curr->arg1, curr->arg2);
                 printf("     // Runtime addition needed\n");
+                break;
+            case TAC_SUBTRACT:
+                printf("%s = %s - %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Runtime subtraction needed\n");
                 break;
             case TAC_ASSIGN:
                 printf("%s = %s", curr->result, curr->arg1);
