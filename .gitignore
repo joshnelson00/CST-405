@@ -1,0 +1,42 @@
+
+# =========================
+# OS-specific files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Editor / IDE files
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+*~
+*.bak
+
+# =========================
+# Logs & debug artifacts
+# =========================
+*.log
+
+# =========================
+# Build directories (but NOT files)
+# =========================
+build/
+dist/
+out/
+
+# =========================
+# Coverage / profiling
+# =========================
+*.gcda
+*.gcno
+*.gcov
+
+# =========================
+# Dependency caches
+# =========================
+.cache/
+__pycache__/
