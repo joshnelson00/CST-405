@@ -39,6 +39,9 @@ void genExpr(ASTNode* node) {
                 fprintf(output, "    add $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
             } else if (node->data.binop.op == '-') {
                 fprintf(output, "    sub $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
+            } else if (node->data.binop.op == '*') {
+                fprintf(output, "    mult $t%d, $t%d\n", leftReg, rightReg);
+                fprintf(output, "    mflo $t%d\n", leftReg);
             } else {
                 fprintf(stderr, "Unknown operator: %c\n", node->data.binop.op);
                 exit(1);
