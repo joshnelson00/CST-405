@@ -22,7 +22,6 @@ ASTNode* createVar(char* name) {
     node->data.name = strdup(name);  /* Copy the variable name */
     return node;
 }
-
 /* Create a binary operation node (for addition) */
 ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right) {
     ASTNode* node = malloc(sizeof(ASTNode));

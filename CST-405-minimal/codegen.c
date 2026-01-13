@@ -28,16 +28,26 @@ void genExpr(ASTNode* node) {
             }
             fprintf(output, "    lw $t%d, %d($sp)\n", getNextTemp(), offset);
             break;
-        }
-        
-        case NODE_BINOP:
+        } 
+        case NODE_BINOP: {
             genExpr(node->data.binop.left);
             int leftReg = tempReg - 1;
             genExpr(node->data.binop.right);
             int rightReg = tempReg - 1;
-            fprintf(output, "    add $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
+
+            if (node->data.binop.op == '+') {
+                fprintf(output, "    add $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
+            } else if (node->data.binop.op == '-') {
+                fprintf(output, "    sub $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
+            } else {
+                fprintf(stderr, "Unknown operator: %c\n", node->data.binop.op);
+                exit(1);
+            }
+
             tempReg = leftReg + 1;
             break;
+        }
+        
             
         default:
             break;
