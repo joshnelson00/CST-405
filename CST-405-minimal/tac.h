@@ -13,6 +13,7 @@
 typedef enum {
     TAC_ADD,     /* Addition: result = arg1 + arg2 */
     TAC_SUBTRACT,
+    TAC_MULTIPLY,
     TAC_ASSIGN,  /* Assignment: result = arg1 */
     TAC_PRINT,   /* Print: print(arg1) */
     TAC_DECL     /* Declaration: declare result */

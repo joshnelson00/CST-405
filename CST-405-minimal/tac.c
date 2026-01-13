@@ -48,6 +48,21 @@ void appendOptimizedTAC(TACInstr* instr) {
         optimizedList.tail = instr;
     }
 }
+int isConst(const char* s) {
+    if (!s || *s == '\0') return 0;
+
+    // Allow leading minus
+    if (*s == '-') s++;
+
+    if (!isdigit(*s)) return 0;
+
+    while (*s) {
+        if (!isdigit(*s)) return 0;
+        s++;
+    }
+
+    return 1;
+}
 
 char* generateTACExpr(ASTNode* node) {
     if (!node) return NULL;
@@ -71,6 +86,8 @@ char* generateTACExpr(ASTNode* node) {
                 appendTAC(createTAC(TAC_ADD, left, right, temp));
             } else if (node->data.binop.op == '-') {
                 appendTAC(createTAC(TAC_SUBTRACT, left, right, temp));
+            } else if (node->data.binop.op == '*') {
+                appendTAC(createTAC(TAC_MULTIPLY, left, right, temp));
             }
             return temp;
         }
@@ -129,6 +146,10 @@ void printTAC() {
             case TAC_SUBTRACT:
                 printf("%s = %s - %s", curr->result, curr->arg1, curr->arg2);
                 printf("     // Subtract: store result in %s\n", curr->result);
+                break;
+            case TAC_MULTIPLY:
+                printf("%s = %s * %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Multiply: store result in %s\n", curr->result);
                 break;
             case TAC_ASSIGN:
                 printf("%s = %s", curr->result, curr->arg1);
@@ -239,6 +260,38 @@ void optimizeTAC() {
                 }
                 break;
             }
+        case TAC_MULTIPLY: {
+            char* left = curr->arg1;
+            char* right = curr->arg2;
+
+            for (int i = valueCount - 1; i >= 0; i--) {
+                if (strcmp(values[i].var, left) == 0) {
+                    left = values[i].value;
+                    break;
+                }
+            }
+            for (int i = valueCount - 1; i >= 0; i--) {
+                if (strcmp(values[i].var, right) == 0) {
+                    right = values[i].value;
+                    break;
+                }
+            }
+
+            if (isConst(left) && isConst(right)) {
+                int result = atoi(left) * atoi(right);
+                char* resultStr = malloc(20);
+                sprintf(resultStr, "%d", result);
+
+                values[valueCount].var = strdup(curr->result);
+                values[valueCount].value = resultStr;
+                valueCount++;
+
+                newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
+            } else {
+                newInstr = createTAC(TAC_MULTIPLY, left, right, curr->result);
+            }
+            break;
+        }
             case TAC_ASSIGN: {
                 char* value = curr->arg1;
                 
@@ -301,6 +354,10 @@ void printOptimizedTAC() {
             case TAC_SUBTRACT:
                 printf("%s = %s - %s", curr->result, curr->arg1, curr->arg2);
                 printf("     // Runtime subtraction needed\n");
+                break;
+            case TAC_MULTIPLY:
+                printf("%s = %s * %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Runtime multiplication needed\n");
                 break;
             case TAC_ASSIGN:
                 printf("%s = %s", curr->result, curr->arg1);
