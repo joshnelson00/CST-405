@@ -1,15 +1,22 @@
 int x;
 int y;
 int z;
+int w;
 
 x = 10;
 y = 20;
+
 z = x + y;
 print(z);
 
 x = z - 5;
 print(x);
 
-y = x + y + z;
-print(y);
+w = (x + y) * 2;
+print(w);
 
+z = w / y;
+print(z);
+
+x = x + y * z - 10 / 2;
+print(x);

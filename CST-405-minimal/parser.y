@@ -37,8 +37,9 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
 %type <node> program stmt_list stmt decl assign expr print_stmt
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
-%left '+'  /* Addition is left-associative: a+b+c = (a+b)+c */
-%left '-'  /* Subtraction is left-associative: a-b+c = (a-b)+c */
+%left '+' '-'
+%left '*' '/'
+
 %%
 
 /* GRAMMAR RULES - Define the structure of our language */
@@ -106,6 +107,17 @@ expr:
     | expr '-' expr { 
         /* Subtraction operation - builds binary tree */
         $$ = createBinOp('-', $1, $3);  /* Left child, op, right child */
+    }
+    | expr '*' expr { 
+        /* Multiplication operation - builds binary tree */
+        $$ = createBinOp('*', $1, $3);  /* Left child, op, right child */
+    }
+    | expr '/' expr { 
+        /* Division operation - builds binary tree */
+        $$ = createBinOp('/', $1, $3);  /* Left child, op, right child */
+    }
+    | '(' expr ')' {
+        $$ = $2;
     }
     ;
 /* PRINT STATEMENT - "print(expr);" */

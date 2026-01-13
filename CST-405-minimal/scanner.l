@@ -35,6 +35,8 @@ int yycolumn = 1;
 
 "+"             { yycolumn++; return '+'; }
 "-"             { yycolumn++; return '-'; }
+"*"             { yycolumn++; return '*'; }
+"/"             { yycolumn++; return '/'; }
 "="             { yycolumn++; return '='; }
 ";"             { yycolumn++; return ';'; }
 "("             { yycolumn++; return '('; }

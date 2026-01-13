@@ -88,6 +88,8 @@ char* generateTACExpr(ASTNode* node) {
                 appendTAC(createTAC(TAC_SUBTRACT, left, right, temp));
             } else if (node->data.binop.op == '*') {
                 appendTAC(createTAC(TAC_MULTIPLY, left, right, temp));
+            } else if (node->data.binop.op == '/') {
+                appendTAC(createTAC(TAC_DIVIDE, left, right, temp));
             }
             return temp;
         }
@@ -150,6 +152,10 @@ void printTAC() {
             case TAC_MULTIPLY:
                 printf("%s = %s * %s", curr->result, curr->arg1, curr->arg2);
                 printf("     // Multiply: store result in %s\n", curr->result);
+                break;
+            case TAC_DIVIDE:
+                printf("%s = %s / %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Divide: store result in %s\n", curr->result);
                 break;
             case TAC_ASSIGN:
                 printf("%s = %s", curr->result, curr->arg1);
@@ -289,6 +295,38 @@ void optimizeTAC() {
                 newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
             } else {
                 newInstr = createTAC(TAC_MULTIPLY, left, right, curr->result);
+            }
+            break;
+        }
+        case TAC_DIVIDE: {
+            char* left = curr->arg1;
+            char* right = curr->arg2;
+
+            for (int i = valueCount - 1; i >= 0; i--) {
+                if (strcmp(values[i].var, left) == 0) {
+                    left = values[i].value;
+                    break;
+                }
+            }
+            for (int i = valueCount - 1; i >= 0; i--) {
+                if (strcmp(values[i].var, right) == 0) {
+                    right = values[i].value;
+                    break;
+                }
+            }
+
+            if (isConst(left) && isConst(right)) {
+                int result = atoi(left) * atoi(right);
+                char* resultStr = malloc(20);
+                sprintf(resultStr, "%d", result);
+
+                values[valueCount].var = strdup(curr->result);
+                values[valueCount].value = resultStr;
+                valueCount++;
+
+                newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
+            } else {
+                newInstr = createTAC(TAC_DIVIDE, left, right, curr->result);
             }
             break;
         }
