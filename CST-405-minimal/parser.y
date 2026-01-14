@@ -23,15 +23,18 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
  * This allows different grammar rules to return different data types
  */
 %union {
-    int num;                /* For integer literals */
+    double num;                /* For integer literals */
     char* str;              /* For identifiers */
     struct ASTNode* node;   /* For AST nodes */
 }
 
 /* TOKEN DECLARATIONS with their semantic value types */
 %token <num> NUM        /* Number token carries an integer value */
+%token <num> FLT        /* Float token carries a float value */
 %token <str> ID         /* Identifier token carries a string */
-%token INT PRINT        /* Keywords have no semantic value */
+%token INT /* Keywords have no semantic value */
+%token FLOAT /* Keywords have no semantic value */
+%token PRINT /* Keywords have no semantic value */
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
 %type <node> program stmt_list stmt decl assign expr print_stmt
@@ -75,8 +78,13 @@ stmt:
 decl:
     INT ID ';' { 
         /* Create declaration node and free the identifier string */
-        $$ = createDecl($2);  /* $2 is the ID token's string value */
-        free($2);             /* Free the string copy from scanner */
+        $$ = createDecl($2, TYPE_INT);  /* $2 is the ID token's string value */
+        free($2);                       /* Free the string copy from scanner */
+    }
+    | FLOAT ID ';' { 
+        /* Create declaration node and free the identifier string */
+        $$ = createDecl($2, TYPE_FLOAT); /* $2 is the ID token's string value */
+        free($2);                       /* Free the string copy from scanner */
     }
     ;
 
@@ -94,6 +102,9 @@ expr:
     NUM { 
         /* Literal number */
         $$ = createNum($1);  /* Create leaf node with number value */
+    }
+    | FLT { 
+        $$ = createFlt($1);  // Add float literal handling
     }
     | ID { 
         /* Variable reference */

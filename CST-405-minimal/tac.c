@@ -48,20 +48,13 @@ void appendOptimizedTAC(TACInstr* instr) {
         optimizedList.tail = instr;
     }
 }
+
 int isConst(const char* s) {
     if (!s || *s == '\0') return 0;
 
-    // Allow leading minus
-    if (*s == '-') s++;
-
-    if (!isdigit(*s)) return 0;
-
-    while (*s) {
-        if (!isdigit(*s)) return 0;
-        s++;
-    }
-
-    return 1;
+    char* end;
+    strtod(s, &end);
+    return *end == '\0';
 }
 
 char* generateTACExpr(ASTNode* node) {
@@ -74,8 +67,14 @@ char* generateTACExpr(ASTNode* node) {
             return temp;
         }
         
+        case NODE_FLT: {
+            char* temp = malloc(20);
+            sprintf(temp, "%f", node->data.flt);
+            return temp;
+        }
+        
         case NODE_VAR:
-            return strdup(node->data.name);
+            return strdup(node->data.var.name);
         
         case NODE_BINOP: {
             char* left = generateTACExpr(node->data.binop.left);
@@ -104,7 +103,7 @@ void generateTAC(ASTNode* node) {
     
     switch(node->type) {
         case NODE_DECL:
-            appendTAC(createTAC(TAC_DECL, NULL, NULL, node->data.name));
+            appendTAC(createTAC(TAC_DECL, NULL, NULL, node->data.var.name));
             break;
             
         case NODE_ASSIGN: {
@@ -284,9 +283,11 @@ void optimizeTAC() {
             }
 
             if (isConst(left) && isConst(right)) {
-                int result = atoi(left) * atoi(right);
-                char* resultStr = malloc(20);
-                sprintf(resultStr, "%d", result);
+                double result = atof(left) + atof(right);
+                char* resultStr = malloc(32);
+
+                // Preserve float formatting
+                sprintf(resultStr, "%.6f", result);
 
                 values[valueCount].var = strdup(curr->result);
                 values[valueCount].value = resultStr;
@@ -316,9 +317,9 @@ void optimizeTAC() {
             }
 
             if (isConst(left) && isConst(right)) {
-                int result = atoi(left) * atoi(right);
+                double result = atof(left) / atof(right);
                 char* resultStr = malloc(20);
-                sprintf(resultStr, "%d", result);
+                sprintf(resultStr, "%.6f", result);
 
                 values[valueCount].var = strdup(curr->result);
                 values[valueCount].value = resultStr;

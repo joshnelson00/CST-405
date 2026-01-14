@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ast.h"
+#include "symtab.h"
 
 /* Create a number literal node */
 ASTNode* createNum(int value) {
@@ -15,11 +16,19 @@ ASTNode* createNum(int value) {
     return node;
 }
 
+ASTNode* createFlt(double value) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_FLT;
+    node->data.flt = (float)value;
+    return node;
+}
+
 /* Create a variable reference node */
 ASTNode* createVar(char* name) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_VAR;
-    node->data.name = strdup(name);  /* Copy the variable name */
+    node->data.var.name = strdup(name);  /* Copy the variable name */
+    node->data.var.type = getVarType(name);       /* Default type for variables */
     return node;
 }
 /* Create a binary operation node (for addition) */
@@ -33,10 +42,11 @@ ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right) {
 }
 
 /* Create a variable declaration node */
-ASTNode* createDecl(char* name) {
+ASTNode* createDecl(char* name, VarType type) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_DECL;
-    node->data.name = strdup(name);  /* Store variable name */
+    node->data.var.name = strdup(name);  /* Store variable name */
+    node->data.var.type = type;          /* Store variable type */
     return node;
 }
 
@@ -89,8 +99,11 @@ void printAST(ASTNode* node, int level) {
         case NODE_NUM:
             printf("NUM: %d\n", node->data.num);
             break;
+        case NODE_FLT:
+            printf("FLT: %f\n", node->data.flt);
+            break;
         case NODE_VAR:
-            printf("VAR: %s\n", node->data.name);
+            printf("VAR: %s\n", node->data.var.name);
             break;
         case NODE_BINOP:
             printf("BINOP: %c\n", node->data.binop.op);
@@ -98,7 +111,8 @@ void printAST(ASTNode* node, int level) {
             printAST(node->data.binop.right, level + 1);
             break;
         case NODE_DECL:
-            printf("DECL: %s\n", node->data.name);
+            printf("DECL: %s (%s)\n", node->data.var.name, 
+                   node->data.var.type == TYPE_FLOAT ? "float" : "int");
             break;
         case NODE_ASSIGN:
             printf("ASSIGN: %s\n", node->data.assign.var);

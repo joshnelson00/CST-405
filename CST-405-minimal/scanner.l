@@ -19,6 +19,7 @@ int yycolumn = 1;
 %%
 
 "int"           { yycolumn += yyleng; return INT; }
+"float"           { yycolumn += yyleng; return FLOAT; }
 "print"         { yycolumn += yyleng; return PRINT; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
@@ -27,8 +28,14 @@ int yycolumn = 1;
     return ID; 
 }
 
-[0-9]+          { 
-    yylval.num = atoi(yytext);
+[0-9]+\.[0-9]+ {
+    yylval.num = atof(yytext);  // Use atof for floats
+    yycolumn += yyleng;
+    return FLT;                 // Return FLT token
+}
+
+[0-9]+ {
+    yylval.num = atoi(yytext);  // Keep atoi for integers
     yycolumn += yyleng;
     return NUM; 
 }

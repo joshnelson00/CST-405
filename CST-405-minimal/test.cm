@@ -1,9 +1,9 @@
-int x;
-int y;
-int z;
+float x;
+float y;
+float z;
 int w;
 
-x = 10;
+x = 10.60;
 y = 20;
 
 z = x + y;
