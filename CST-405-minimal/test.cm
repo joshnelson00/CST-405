@@ -15,7 +15,7 @@ print(x);
 w = (x + y) * 2;
 print(w);
 
-z = w / y;
+z = w - y;
 print(z);
 
 x = x + y * z - 10 / 2;
