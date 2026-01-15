@@ -7,6 +7,7 @@
 #include "ast.h"
 #include "codegen.h"
 #include "tac.h"
+#include "symtab.h"
 
 extern int yyparse();
 extern FILE* yyin;
@@ -31,11 +32,18 @@ int main(int argc, char* argv[]) {
     printf("╚════════════════════════════════════════════════════════════╝\n");
     printf("\n");
     
+    /* PHASE 0: Various Initializations */
+    printf("┌──────────────────────────────────────────────────────────┐\n");
+    printf("│ PHASE 0: VARIOUS INITIALIZATIONS                         │\n");
+    printf("└──────────────────────────────────────────────────────────┘\n");
+
+    initSymTab();  /* Initialize symbol table */
+
     /* PHASE 1: Lexical and Syntax Analysis */
     printf("┌──────────────────────────────────────────────────────────┐\n");
     printf("│ PHASE 1: LEXICAL & SYNTAX ANALYSIS                       │\n");
     printf("├──────────────────────────────────────────────────────────┤\n");
-    printf("│ • Reading source file: %s\n", argv[1]);
+    printf("│ • Reading source file: %s\n", argv[1]);                   
     printf("│ • Tokenizing input (scanner.l)\n");
     printf("│ • Parsing grammar rules (parser.y)\n");
     printf("│ • Building Abstract Syntax Tree\n");

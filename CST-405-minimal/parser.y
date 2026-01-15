@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ast.h"
+#include "symtab.h"
 
 /* External declarations for lexer interface */
 extern int yylex();      /* Get next token from scanner */
@@ -77,14 +78,20 @@ stmt:
 /* DECLARATION RULE - "int x;" */
 decl:
     INT ID ';' { 
+        /* Add variable to symbol table before freeing the string */
+        addVar($2, TYPE_INT);                    /* Add the INT variable to symbol table */
         /* Create declaration node and free the identifier string */
         $$ = createDecl($2, TYPE_INT);  /* $2 is the ID token's string value */
-        free($2);                       /* Free the string copy from scanner */
+        free($2);  
+        printSymTab();          /* Print symbol table for verification */
     }
     | FLOAT ID ';' { 
+        /* Add variable to symbol table before freeing the string */
+        addVar($2, TYPE_FLOAT); /* Add the FLOAT variable to symbol table */
         /* Create declaration node and free the identifier string */
         $$ = createDecl($2, TYPE_FLOAT); /* $2 is the ID token's string value */
         free($2);                       /* Free the string copy from scanner */
+        printSymTab();          /* Print symbol table for verification */
     }
     ;
 

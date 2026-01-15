@@ -25,6 +25,7 @@ typedef struct {
 /* SYMBOL TABLE STRUCTURE */
 typedef struct {
     Symbol vars[MAX_VARS];  /* Array of all variables */
+    VarType type;           /* Variable type */
     int count;              /* Number of variables declared */
     int nextOffset;         /* Next available stack offset */
 } SymbolTable;
