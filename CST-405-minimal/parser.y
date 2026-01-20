@@ -14,6 +14,8 @@
 extern int yylex();      /* Get next token from scanner */
 extern int yyparse();    /* Parse the entire input */
 extern FILE* yyin;       /* Input file handle */
+extern int yyline;       /* Current line number from scanner */
+extern int yycolumn;     /* Current column number from scanner */
 
 void yyerror(const char* s);  /* Error handling function */
 ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
@@ -54,6 +56,7 @@ program:
         /* Action: Save the statement list as our AST root */
         root = $1;  /* $1 refers to the first symbol (stmt_list) */
     }
+    | stmt_list error          { root = $1; yyerrok; }
     ;
 
 /* STATEMENT LIST - Handles multiple statements */
@@ -73,6 +76,8 @@ stmt:
     decl        /* Variable declaration */
     | assign    /* Assignment statement */
     | print_stmt /* Print statement */
+    | error ';' { yyerrok; }
+    | error { yyerrok; }
     ;
 
 /* DECLARATION RULE - "int x;" */
@@ -148,7 +153,26 @@ print_stmt:
 
 %%
 
-/* ERROR HANDLING - Called by Bison when syntax error detected */
+/* ERROR HANDLING - Enhanced error reporting with context */
 void yyerror(const char* s) {
-    fprintf(stderr, "Syntax Error: %s\n", s);
+    fprintf(stderr, "\n❌ Syntax Error at line %d, column %d:\n", yyline, yycolumn);
+    
+    // Show the problematic line with pointer
+    fprintf(stderr, "   %d | ", yyline);
+    
+    // This is a simplified approach - in a real compiler you'd track the full line
+    if (strstr(s, "syntax error")) {
+        fprintf(stderr, "Unexpected token or incomplete statement\n");
+        fprintf(stderr, "💡 Common fixes:\n");
+        fprintf(stderr, "   • Add missing semicolon ';'\n");
+        fprintf(stderr, "   • Check for unmatched parentheses\n");
+        fprintf(stderr, "   • Verify variable declarations\n");
+    } else if (strstr(s, "unexpected")) {
+        fprintf(stderr, "Unexpected token in expression\n");
+        fprintf(stderr, "💡 Check operator precedence and parentheses\n");
+    } else {
+        fprintf(stderr, "%s\n", s);
+    }
+    
+    fprintf(stderr, "\n");
 }

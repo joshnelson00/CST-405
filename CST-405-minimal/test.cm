@@ -1,22 +1,6 @@
-float x;
-float y;
-float z;
-int w;
+int x;
+int y;
 
-x = 10.60;
-y = 20;
-
-z = x + y;
-print(z);
-
-x = z - 5;
-print(x);
-
-w = (x + y) * 2;
-print(w);
-
-z = w - y;
-print(z);
-
-x = x + y * z - 10 / 2;
-print(x);
+x = 3;
+y = x + 5;
+print(y);

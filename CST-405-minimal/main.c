@@ -104,11 +104,26 @@ int main(int argc, char* argv[]) {
         printf("║         Run the output file in a MIPS simulator            ║\n");
         printf("╚════════════════════════════════════════════════════════════╝\n");
     } else {
-        printf("✗ Parse failed - check your syntax!\n");
-        printf("Common errors:\n");
-        printf("  • Missing semicolon after statements\n");
-        printf("  • Undeclared variables\n");
-        printf("  • Invalid syntax for print statements\n");
+        printf("\n❌ Compilation Failed!\n");
+        printf("┌──────────────────────────────────────────────────┐\n");
+        printf("│                  ERROR SUMMARY                   │\n");
+        printf("├──────────────────────────────────────────────────┤\n");
+        printf("│ Your code has syntax or semantic errors          │\n");
+        printf("│ Check the messages above for details             │\n");
+        printf("│                                                  │\n");
+        printf("│ 💡 Most Common Errors:                           │\n");
+        printf("│   • Missing semicolon ';'                        │\n");
+        printf("│   • Undeclared variables                         │\n");
+        printf("│   • Invalid print syntax                         │\n");
+        printf("│   • Type mismatches                              │\n");
+        printf("│   • Unmatched parentheses                        │\n");
+        printf("└──────────────────────────────────────────────────┘\n");
+        printf("\n🔧 Quick fixes to try:\n");
+        printf("   1. Add semicolons after each statement\n");
+        printf("   2. Declare all variables before use\n");
+        printf("   3. Use print(expression) with semicolon\n");
+        printf("   4. Check parentheses matching\n");
+        printf("   5. Verify variable names are spelled correctly\n");
         return 1;
     }
     

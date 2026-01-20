@@ -5,6 +5,9 @@
 #include "ast.h"
 #include "symtab.h"
 
+/* External declarations for line tracking */
+extern int yyline;
+
 // Register pool management functions
 void initRegisterPool(RegisterPool* pool) {
     for (int i = 0; i < 8; i++) {
@@ -327,9 +330,22 @@ void genStmt(CodeGenContext* ctx, ASTNode* node) {
             }
             
             // Everything else is illegal
-            fprintf(stderr, "Type error: assigning %s to %s\n",
+            fprintf(stderr, "\n❌ Type Error at line %d:\n", yyline);
+            fprintf(stderr, "   Cannot assign %s value to %s variable '%s'\n", 
                     val.type == TYPE_FLOAT ? "float" : "int",
-                    varType == TYPE_FLOAT ? "float" : "int");
+                    varType == TYPE_FLOAT ? "float" : "int",
+                    node->data.assign.var);
+            fprintf(stderr, "💡 Possible solutions:\n");
+            if (varType == TYPE_FLOAT && val.type == TYPE_INT) {
+                fprintf(stderr, "   • This should work - int should convert to float\n");
+                fprintf(stderr, "   • Check if variable was properly declared as float\n");
+            } else if (varType == TYPE_INT && val.type == TYPE_FLOAT) {
+                fprintf(stderr, "   • Use explicit cast: int %s = (int)%s\n", 
+                        node->data.assign.var, node->data.assign.var);
+                fprintf(stderr, "   • Or change variable '%s' to float type\n", 
+                        node->data.assign.var);
+            }
+            fprintf(stderr, "\n");
             exit(1);
         }
 
