@@ -23,6 +23,36 @@ void reportSemanticError(const char* msg) {
     semanticErrors++;
 }
 
+/* Get the type of an expression for type checking */
+VarType getExprType(ASTNode* node) {
+    if (!node) return TYPE_INT;
+    
+    switch(node->type) {
+        case NODE_NUM:
+            return TYPE_INT;
+        case NODE_FLT:
+            return TYPE_FLOAT;
+        case NODE_VAR:
+            if (isVarDeclared(node->data.var.name)) {
+                return getVarType(node->data.var.name);
+            } else {
+                return TYPE_INT; // Default for undeclared variables
+            }
+        case NODE_BINOP: {
+            VarType leftType = getExprType(node->data.binop.left);
+            VarType rightType = getExprType(node->data.binop.right);
+            
+            // If either operand is float, result is float
+            if (leftType == TYPE_FLOAT || rightType == TYPE_FLOAT) {
+                return TYPE_FLOAT;
+            }
+            return TYPE_INT;
+        }
+        default:
+            return TYPE_INT;
+    }
+}
+
 /* Analyze an expression for semantic correctness */
 void analyzeExpr(ASTNode* node) {
     if (!node) return;
@@ -30,6 +60,12 @@ void analyzeExpr(ASTNode* node) {
     switch(node->type) {
         case NODE_NUM:
             /* Numbers are always valid */
+            printf("  ✓ Integer literal: %d\n", node->data.num);
+            break;
+
+        case NODE_FLT:
+            /* Float literals are always valid */
+            printf("  ✓ Float literal: %f\n", node->data.flt);
             break;
 
         case NODE_VAR: {
@@ -39,16 +75,31 @@ void analyzeExpr(ASTNode* node) {
                 sprintf(errorMsg, "Variable '%s' used before declaration", node->data.var.name);
                 reportSemanticError(errorMsg);
             } else {
-                printf("  ✓ Variable '%s' is declared\n", node->data.var.name);
+                VarType varType = getVarType(node->data.var.name);
+                printf("  ✓ Variable '%s' (%s)\n", node->data.var.name, 
+                       varType == TYPE_FLOAT ? "float" : "int");
             }
             break;
         }
 
-        case NODE_BINOP:
-            /* Recursively analyze both operands */
+        case NODE_BINOP: {
+            /* Analyze both operands first */
             analyzeExpr(node->data.binop.left);
             analyzeExpr(node->data.binop.right);
+            
+            /* Check for type compatibility */
+            VarType leftType = getExprType(node->data.binop.left);
+            VarType rightType = getExprType(node->data.binop.right);
+            VarType resultType = getExprType(node);
+            
+            printf("  ✓ Binary operation '%c': %s %c %s = %s\n", 
+                   node->data.binop.op,
+                   leftType == TYPE_FLOAT ? "float" : "int",
+                   node->data.binop.op,
+                   rightType == TYPE_FLOAT ? "float" : "int",
+                   resultType == TYPE_FLOAT ? "float" : "int");
             break;
+        }
 
         default:
             break;
@@ -70,7 +121,8 @@ void analyzeStmt(ASTNode* node) {
                 /* Add variable to symbol table */
                 int offset = addVar(node->data.var.name, node->data.var.type);
                 if (offset != -1) {
-                    printf("  ✓ Variable '%s' declared successfully\n", node->data.var.name);
+                    printf("  ✓ Variable '%s' declared as %s\n", node->data.var.name,
+                           node->data.var.type == TYPE_FLOAT ? "float" : "int");
                 }
             }
             break;
@@ -83,18 +135,45 @@ void analyzeStmt(ASTNode* node) {
                 sprintf(errorMsg, "Cannot assign to undeclared variable '%s'", node->data.assign.var);
                 reportSemanticError(errorMsg);
             } else {
-                printf("  ✓ Assignment to declared variable '%s'\n", node->data.assign.var);
+                /* Get types for type checking */
+                VarType varType = getVarType(node->data.assign.var);
+                VarType exprType = getExprType(node->data.assign.value);
+                
+                printf("  ✓ Assignment: %s (%s) = expression (%s)\n", 
+                       node->data.assign.var,
+                       varType == TYPE_FLOAT ? "float" : "int",
+                       exprType == TYPE_FLOAT ? "float" : "int");
+                
+                /* Check for type compatibility with warnings */
+                if (varType != exprType) {
+                    char errorMsg[256];
+                    if (varType == TYPE_FLOAT && exprType == TYPE_INT) {
+                        sprintf(errorMsg, "Type warning: assigning int to float variable '%s' (implicit conversion)", 
+                                node->data.assign.var);
+                        printf("  ⚠ %s\n", errorMsg); // Warning, not error
+                    } else if (varType == TYPE_INT && exprType == TYPE_FLOAT) {
+                        sprintf(errorMsg, "Type warning: assigning float to int variable '%s' (truncation)", 
+                                node->data.assign.var);
+                        printf("  ⚠ %s\n", errorMsg); // Warning, not error
+                    }
+                } else {
+                    printf("  ✓ Type compatible assignment\n");
+                }
             }
             /* Check the expression being assigned */
             analyzeExpr(node->data.assign.value);
             break;
         }
 
-        case NODE_PRINT:
+        case NODE_PRINT: {
             /* Check the expression being printed */
             printf("  Checking print statement expression:\n");
+            VarType exprType = getExprType(node->data.expr);
+            printf("  ✓ Print expression type: %s\n", 
+                   exprType == TYPE_FLOAT ? "float" : "int");
             analyzeExpr(node->data.expr);
             break;
+        }
 
         case NODE_STMT_LIST:
             /* Recursively analyze all statements */
