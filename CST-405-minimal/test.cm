@@ -1,6 +1,10 @@
 int x;
 int y;
+int z;
 
-x = 3;
-y = x + 5;
-print(y);
+x = 5;
+y = 4;
+z = x + y;
+
+print (z);
+

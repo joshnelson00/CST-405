@@ -8,6 +8,7 @@
 #include "codegen.h"
 #include "tac.h"
 #include "symtab.h"
+#include "semantic.h"
 
 extern int yyparse();
 extern FILE* yyin;
@@ -60,10 +61,27 @@ int main(int argc, char* argv[]) {
         printf("└──────────────────────────────────────────────────────────┘\n");
         printAST(root, 0);
         printf("\n");
-        
-        /* PHASE 3: Intermediate Code */
+
+         /* PHASE 3: Semantic Analysis */
         printf("┌──────────────────────────────────────────────────────────┐\n");
-        printf("│ PHASE 3: INTERMEDIATE CODE GENERATION                    │\n");
+        printf("│ PHASE 3: SEMANTIC ANALYSIS                               │\n");
+        printf("├──────────────────────────────────────────────────────────┤\n");
+        printf("│ Checking semantic correctness:                           │\n");
+        printf("│ • Variables declared before use                          │\n");
+        printf("│ • No duplicate declarations                              │\n");
+        printf("│ • Type consistency (for future extensions)               │\n");
+        printf("└──────────────────────────────────────────────────────────┘\n");
+        initSemantic();
+        if (!analyzeProgram(root)) {
+            printf("\n✗ Compilation failed due to semantic errors!\n");
+            fclose(yyin);
+            return 1;
+        }
+        printf("\n");
+
+        /* PHASE 4: Intermediate Code */
+        printf("┌──────────────────────────────────────────────────────────┐\n");
+        printf("│ PHASE 4: INTERMEDIATE CODE GENERATION                    │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
         printf("│ Three-Address Code (TAC) - simplified instructions:      │\n");
         printf("│ • Each instruction has at most 3 operands                │\n");
@@ -74,9 +92,9 @@ int main(int argc, char* argv[]) {
         printTAC();
         printf("\n");
         
-        /* PHASE 4: Optimization */
+        /* PHASE 5: Optimization */
         printf("┌──────────────────────────────────────────────────────────┐\n");
-        printf("│ PHASE 4: CODE OPTIMIZATION                               │\n");
+        printf("│ PHASE 5: CODE OPTIMIZATION                               │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
         printf("│ Applying optimizations:                                  │\n");
         printf("│ • Constant folding (evaluate compile-time expressions)   │\n");
