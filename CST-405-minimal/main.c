@@ -104,9 +104,9 @@ int main(int argc, char* argv[]) {
         printOptimizedTAC();
         printf("\n");
         
-        /* PHASE 5: Code Generation */
+        /* PHASE 6: Code Generation */
         printf("┌──────────────────────────────────────────────────────────┐\n");
-        printf("│ PHASE 5: MIPS CODE GENERATION                            │\n");
+        printf("│ PHASE 6: MIPS CODE GENERATION                            │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
         printf("│ Translating to MIPS assembly:                            │\n");
         printf("│ • Variables stored on stack                              │\n");
