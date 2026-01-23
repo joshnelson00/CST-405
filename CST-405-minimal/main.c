@@ -7,6 +7,7 @@
 #include "ast.h"
 #include "codegen.h"
 #include "tac.h"
+#include "optimizer.h"
 #include "symtab.h"
 
 extern int yyparse();
@@ -72,6 +73,7 @@ int main(int argc, char* argv[]) {
         initTAC();
         generateTAC(root);
         printTAC();
+        printTACToFile("tac.txt");
         printf("\n");
         
         /* PHASE 4: Optimization */
@@ -84,18 +86,19 @@ int main(int argc, char* argv[]) {
         printf("└──────────────────────────────────────────────────────────┘\n");
         optimizeTAC();
         printOptimizedTAC();
+        printOptimizedTACToFile("tac-optimized.txt");
         printf("\n");
         
         /* PHASE 5: Code Generation */
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ PHASE 5: MIPS CODE GENERATION                            │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
-        printf("│ Translating to MIPS assembly:                            │\n");
+        printf("│ Translating optimized TAC to MIPS assembly:              │\n");
         printf("│ • Variables stored on stack                              │\n");
         printf("│ • Using $t0-$t7 for temporary values                     │\n");
         printf("│ • System calls for print operations                      │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
-        generateMIPS(root, argv[2]);
+        generateMIPSFromOptimizedTAC(argv[2]);
         printf("✓ MIPS assembly code generated to: %s\n", argv[2]);
         printf("\n");
         

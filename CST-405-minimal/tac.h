@@ -45,9 +45,8 @@ void appendTAC(TACInstr* instr);                                  /* Add instruc
 void generateTAC(ASTNode* node);                                  /* Convert AST to TAC */
 char* generateTACExpr(ASTNode* node);                             /* Generate TAC for expression */
 
-/* TAC OPTIMIZATION AND OUTPUT */
+/* TAC OUTPUT FUNCTIONS */
 void printTAC();                                                   /* Display unoptimized TAC */
-void optimizeTAC();                                                /* Apply optimizations */
-void printOptimizedTAC();                                          /* Display optimized TAC */
+void appendOptimizedTAC(TACInstr* instr);                         /* Add instruction to optimized list */
 
 #endif
