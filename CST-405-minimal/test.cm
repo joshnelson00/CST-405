@@ -4,3 +4,13 @@ int z;
 x = 3;
 y = x + 5;
 print(y);
+
+/* 
+* this
+* is
+* a
+* multiline
+* comment
+*/
+
+/* this is a single line comment */
