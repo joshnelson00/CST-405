@@ -1,0 +1,8 @@
+Optimized TAC Instructions:
+─────────────────────────────
+ 1: DECL x
+ 2: DECL y
+ 3: x = 3           // Constant value: 3
+ 4: t0 = 8           // Constant value: 8
+ 5: y = 8           // Constant value: 8
+ 6: PRINT 8          // Print constant: 8

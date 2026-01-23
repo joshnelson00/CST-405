@@ -20,6 +20,7 @@ int yycolumn = 1;
 "int"           { yycolumn += yyleng; return INT; }
 "float"           { yycolumn += yyleng; return FLOAT; }
 "print"         { yycolumn += yyleng; return PRINT; }
+
 [a-zA-Z_][a-zA-Z0-9_]* { 
     yylval.str = strdup(yytext);
     yycolumn += yyleng;
