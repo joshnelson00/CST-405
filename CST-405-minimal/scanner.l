@@ -14,6 +14,9 @@ int yycolumn = 1;
 %option nounput
 %option noinput
 %%
+
+"/*"([^*]|\*+[^*/])*\*+"/" {} // Anything between '/* ... */' is a comment
+
 "int"           { yycolumn += yyleng; return INT; }
 "float"           { yycolumn += yyleng; return FLOAT; }
 "print"         { yycolumn += yyleng; return PRINT; }
