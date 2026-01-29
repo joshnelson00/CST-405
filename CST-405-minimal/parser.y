@@ -63,13 +63,8 @@ program:
 
 /* FUNCTION LIST RULES */
 func_list:
-    func { 
-        $$ = createStmtList($1, NULL);  /* Single function */
-    }
-    | func_list func { 
-        $$ = createStmtList($1, $2);  /* Multiple functions */
-    }
-    ;
+    func { $$ = createFuncList($1, NULL); }
+  | func_list func { $$ = createFuncList($1, $2); }
 
 /* FUNCTION RULES */
 func:

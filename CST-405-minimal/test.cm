@@ -1,4 +1,4 @@
-int add(int x, int y) {
+int adding(int x, int y) {
     int result;
     result = x + y;
     return result;
@@ -10,6 +10,6 @@ float multiply(float a, float b) {
 
 void main() {
     int sum;
-    sum = add(5, 3);
+    sum = multiply(5, 3);
     print(sum);
 }
