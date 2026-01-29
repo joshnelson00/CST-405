@@ -25,7 +25,10 @@ typedef enum {
     NODE_FUNC_CALL, /* Function call (e.g., f(x, y)) */
     NODE_ARG_LIST, /* Argument list (e.g., x, y) */
     NODE_STMT_LIST,  /* List of statements (program structure) */
-    NODE_FUNC_LIST  /* List of functions (program structure) */
+    NODE_FUNC_LIST,  /* List of functions (program structure) */
+    NODE_ARRAY_DECL, /* Array declaration (e.g., int x[10]) */
+    NODE_ARRAY_ASSIGN, /* Array element assignment (e.g., x[0] = 5) */
+    NODE_ARRAY_ACCESS, /* Array element access (e.g., x[0]) */
 } NodeType;
 
 /* AST NODE STRUCTURE
@@ -115,6 +118,26 @@ typedef struct ASTNode {
             struct ASTNode* arg;        /* Current argument */
             struct ASTNode* next;        /* Next argument (NULL if last) */
         } arg_list;
+
+        /* Array declaration structure (NODE_ARRAY_DECL) */
+        struct {
+            char* name;              /* Array name */
+            int size; 
+            VarType type;            /* Array type */
+        } array_decl;
+
+        /* Array element assignment structure (NODE_ARRAY_ASSIGN) */
+        struct {
+            char* name;                  /* Array name */           
+            struct ASTNode* index;       /* Index expression */
+            struct ASTNode* value;       /* Value expression */
+        } array_assign;
+
+        /* Array element access structure (NODE_ARRAY_ACCESS) */
+        struct {
+            char* name;                  /* Array name */           
+            struct ASTNode* index;       /* Index expression */ 
+        } array_access;
     } data;
 } ASTNode;
 
@@ -136,6 +159,9 @@ ASTNode* createFuncCall(char* name, ASTNode* args);              /* Create funct
 ASTNode* createArgList(ASTNode* arg, ASTNode* next);             /* Create argument list */
 ASTNode* createStmtList(ASTNode* stmt1, ASTNode* stmt2);        /* Create statement list */
 ASTNode* createFuncList(ASTNode* func1, ASTNode* func2);         /* Create function list */
+ASTNode* createArrayDecl(char* name, VarType type, int size);    /* Create array declaration node */
+ASTNode* createArrayAssign(char* name, ASTNode* index, ASTNode* value); /* Create array element assignment node */
+ASTNode* createArrayAccess(char* name, ASTNode* index);               /* Create array element access node */    
 
 /* AST DISPLAY FUNCTION */
 void printAST(ASTNode* node, int level);                        /* Pretty-print the AST */

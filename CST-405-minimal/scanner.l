@@ -22,6 +22,8 @@ int yycolumn = 1;
 "void"          { yycolumn += yyleng; return VOID; }
 "print"         { yycolumn += yyleng; return PRINT; }
 "return"        { yycolumn += yyleng; return RETURN; }
+"["             { yycolumn++; return '['; }
+"]"             { yycolumn++; return ']'; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
     yylval.str = strdup(yytext);
