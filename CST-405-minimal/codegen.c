@@ -107,8 +107,38 @@ void collectFloatConsts(CodeGenContext* ctx, ASTNode* node) {
         case NODE_ASSIGN:
             collectFloatConsts(ctx, node->data.assign.value);
             break;
+        case NODE_ARRAY_ASSIGN:
+            collectFloatConsts(ctx, node->data.array_assign.index);
+            collectFloatConsts(ctx, node->data.array_assign.value);
+            break;
+        case NODE_ARRAY_ACCESS:
+            collectFloatConsts(ctx, node->data.array_access.index);
+            break;
         case NODE_PRINT:
             collectFloatConsts(ctx, node->data.expr);
+            break;
+        case NODE_RETURN:
+            collectFloatConsts(ctx, node->data.return_stmt.expr);
+            break;
+        case NODE_FUNC_CALL:
+            collectFloatConsts(ctx, node->data.func_call.args);
+            break;
+        case NODE_ARG_LIST:
+            collectFloatConsts(ctx, node->data.arg_list.arg);
+            collectFloatConsts(ctx, node->data.arg_list.next);
+            break;
+        case NODE_FUNC:
+            collectFloatConsts(ctx, node->data.func.params);
+            collectFloatConsts(ctx, node->data.func.body);
+            collectFloatConsts(ctx, node->data.func.next);
+            break;
+        case NODE_FUNC_LIST:
+            collectFloatConsts(ctx, node->data.func_list.func);
+            collectFloatConsts(ctx, node->data.func_list.next);
+            break;
+        case NODE_PARAM_LIST:
+            collectFloatConsts(ctx, node->data.param_list.param);
+            collectFloatConsts(ctx, node->data.param_list.next);
             break;
         case NODE_STMT_LIST:
             collectFloatConsts(ctx, node->data.stmtlist.stmt);
@@ -257,6 +287,42 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
             return res;
         }
 
+        case NODE_ARRAY_ACCESS: {
+            if (!isArrayVar(node->data.array_access.name)) {
+                fprintf(stderr, "Error: %s is not an array\n", node->data.array_access.name);
+                exit(1);
+            }
+
+            ExprResult idx = genExpr(ctx, node->data.array_access.index);
+            if (idx.type != TYPE_INT) {
+                fprintf(stderr, "Error: Array index must be int for %s\n", node->data.array_access.name);
+                exit(1);
+            }
+
+            int baseOffset = getVarOffset(node->data.array_access.name);
+            VarType elemType = getVarType(node->data.array_access.name);
+
+            // idx = idx * 4
+            fprintf(ctx->output, "    sll $t%d, $t%d, 2\n", idx.reg, idx.reg);
+
+            int addrReg = allocateTempReg(&ctx->regPool);
+            fprintf(ctx->output, "    addi $t%d, $sp, %d\n", addrReg, baseOffset);
+            fprintf(ctx->output, "    add $t%d, $t%d, $t%d\n", addrReg, addrReg, idx.reg);
+
+            res.type = elemType;
+            if (elemType == TYPE_FLOAT) {
+                res.reg = allocateFloatReg(&ctx->regPool);
+                fprintf(ctx->output, "    l.s $f%d, 0($t%d)\n", res.reg, addrReg);
+            } else {
+                res.reg = allocateTempReg(&ctx->regPool);
+                fprintf(ctx->output, "    lw $t%d, 0($t%d)\n", res.reg, addrReg);
+            }
+
+            releaseTempReg(&ctx->regPool, idx.reg);
+            releaseTempReg(&ctx->regPool, addrReg);
+            return res;
+        }
+
         default:
             res.reg = -1;
             res.type = TYPE_INT;
@@ -375,6 +441,80 @@ void genStmt(CodeGenContext* ctx, ASTNode* node) {
             genStmt(ctx, node->data.stmtlist.stmt);
             genStmt(ctx, node->data.stmtlist.next);
             break;
+
+        case NODE_ARRAY_DECL: {
+            int res = addArrayVar(node->data.array_decl.name,
+                                  node->data.array_decl.type,
+                                  node->data.array_decl.size);
+            if (res == -1) {
+                fprintf(stderr, "Error: Array %s already declared\n",
+                        node->data.array_decl.name);
+                exit(1);
+            }
+
+            fprintf(ctx->output, "    # Declared array %s (%s) of size %d at offset %d\n",
+                    node->data.array_decl.name,
+                    node->data.array_decl.type == TYPE_FLOAT ? "float" : "int",
+                    node->data.array_decl.size,
+                    res);
+            break;
+        }
+
+        case NODE_ARRAY_ASSIGN: {
+            if (!isArrayVar(node->data.array_assign.name)) {
+                fprintf(stderr, "Error: %s is not an array\n", node->data.array_assign.name);
+                exit(1);
+            }
+
+            int baseOffset = getVarOffset(node->data.array_assign.name);
+            VarType elemType = getVarType(node->data.array_assign.name);
+
+            ExprResult idx = genExpr(ctx, node->data.array_assign.index);
+            if (idx.type != TYPE_INT) {
+                fprintf(stderr, "Error: Array index must be int for %s\n", node->data.array_assign.name);
+                exit(1);
+            }
+
+            // idx = idx * 4
+            fprintf(ctx->output, "    sll $t%d, $t%d, 2\n", idx.reg, idx.reg);
+
+            int addrReg = allocateTempReg(&ctx->regPool);
+            fprintf(ctx->output, "    addi $t%d, $sp, %d\n", addrReg, baseOffset);
+            fprintf(ctx->output, "    add $t%d, $t%d, $t%d\n", addrReg, addrReg, idx.reg);
+
+            ExprResult val = genExpr(ctx, node->data.array_assign.value);
+
+            if (elemType == val.type) {
+                if (elemType == TYPE_FLOAT) {
+                    fprintf(ctx->output, "    s.s $f%d, 0($t%d)\n", val.reg, addrReg);
+                    releaseFloatReg(&ctx->regPool, val.reg);
+                } else {
+                    fprintf(ctx->output, "    sw $t%d, 0($t%d)\n", val.reg, addrReg);
+                    releaseTempReg(&ctx->regPool, val.reg);
+                }
+            } else if (elemType == TYPE_FLOAT && val.type == TYPE_INT) {
+                int ftmp = allocateFloatReg(&ctx->regPool);
+                fprintf(ctx->output, "    mtc1 $t%d, $f%d\n", val.reg, ftmp);
+                fprintf(ctx->output, "    cvt.s.w $f%d, $f%d\n", ftmp, ftmp);
+                fprintf(ctx->output, "    s.s $f%d, 0($t%d)\n", ftmp, addrReg);
+                releaseTempReg(&ctx->regPool, val.reg);
+                releaseFloatReg(&ctx->regPool, ftmp);
+            } else if (elemType == TYPE_INT && val.type == TYPE_FLOAT) {
+                int itmp = allocateTempReg(&ctx->regPool);
+                fprintf(ctx->output, "    trunc.w.s $f%d, $f%d\n", val.reg, val.reg);
+                fprintf(ctx->output, "    mfc1 $t%d, $f%d\n", itmp, val.reg);
+                fprintf(ctx->output, "    sw $t%d, 0($t%d)\n", itmp, addrReg);
+                releaseFloatReg(&ctx->regPool, val.reg);
+                releaseTempReg(&ctx->regPool, itmp);
+            } else {
+                fprintf(stderr, "Error: Type mismatch assigning to array %s\n", node->data.array_assign.name);
+                exit(1);
+            }
+
+            releaseTempReg(&ctx->regPool, idx.reg);
+            releaseTempReg(&ctx->regPool, addrReg);
+            break;
+        }
 
         default:
             break;

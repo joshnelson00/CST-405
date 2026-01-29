@@ -159,14 +159,14 @@ decl:
     }
     | INT ID '[' NUM ']' ';' {
         /* Array declaration */
-        addArray($2, TYPE_INT, (int)$4); /* Add INT array to symbol table */
+        addArrayVar($2, TYPE_INT, (int)$4); /* Add INT array to symbol table */
         $$ = createArrayDecl($2, TYPE_INT, (int)$4); /* Create array declaration node */
         free($2);                       /* Free the identifier string */
         printSymTab();          /* Print symbol table for verification */
     }
     | FLOAT ID '[' NUM ']' ';' {
         /* Array declaration */
-        addArray($2, TYPE_FLOAT, (int)$4); /* Add FLOAT array to symbol table */
+        addArrayVar($2, TYPE_FLOAT, (int)$4); /* Add FLOAT array to symbol table */
         $$ = createArrayDecl($2, TYPE_FLOAT, (int)$4); /* Create array declaration node */
         free($2);                       /* Free the identifier string */
         printSymTab();          /* Print symbol table for verification */
@@ -181,11 +181,6 @@ assign:
     } 
     | ID '[' expr ']' '=' expr ';' {
         /* Array element assignment */
-        $$ = createArrayAssign($1, $3, $6); /* $1 = ID, $3 = index expr, $6 = value expr */
-        free($1);                           /* Free the identifier string */
-    }
-    | FLOAT '[' expr ']' '=' expr ';' {
-        /* Array element assignment for float arrays */
         $$ = createArrayAssign($1, $3, $6); /* $1 = ID, $3 = index expr, $6 = value expr */
         free($1);                           /* Free the identifier string */
     }

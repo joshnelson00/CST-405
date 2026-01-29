@@ -166,6 +166,17 @@ void optimizeTAC() {
                 newInstr = createTAC(TAC_PRINT, value, NULL, NULL);
                 break;
             }
+
+            case TAC_SUBTRACT:
+            case TAC_DIVIDE:
+            case TAC_DECL:
+            case TAC_ARRAY_DECL:
+            case TAC_ARRAY_ASSIGN:
+            case TAC_ARRAY_ACCESS: {
+                // Preserve non-optimized or array-related instructions
+                newInstr = createTAC(curr->op, curr->arg1, curr->arg2, curr->result);
+                break;
+            }
             
             case TAC_FUNC_DEF:
             case TAC_PARAM:
@@ -332,6 +343,15 @@ void printOptimizedTAC() {
             case TAC_ARG:
                 printf("%2d: ARG %s            // Function argument\n", instrNum++, curr->arg1);
                 break;
+            case TAC_ARRAY_DECL:
+                printf("%2d: ARRAY_DECL %s     // Array declaration\n", instrNum++, curr->arg1);
+                break;
+            case TAC_ARRAY_ASSIGN:
+                printf("%2d: ARRAY_ASSIGN %s[%s] = %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ARRAY_ACCESS:
+                printf("%2d: ARRAY_ACCESS %s[%s] -> %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
         }
         curr = curr->next;
     }
@@ -393,6 +413,15 @@ void printOptimizedTACToFile(const char* filename) {
                 break;
             case TAC_ARG:
                 fprintf(file, "%2d: ARG %s            // Function argument\n", instrNum++, curr->arg1);
+                break;
+            case TAC_ARRAY_DECL:
+                fprintf(file, "%2d: ARRAY_DECL %s     // Array declaration\n", instrNum++, curr->arg1);
+                break;
+            case TAC_ARRAY_ASSIGN:
+                fprintf(file, "%2d: ARRAY_ASSIGN %s[%s] = %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ARRAY_ACCESS:
+                fprintf(file, "%2d: ARRAY_ACCESS %s[%s] -> %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
         }
         curr = curr->next;
