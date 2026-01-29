@@ -35,12 +35,14 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
 %token <num> NUM        /* Number token carries an integer value */
 %token <num> FLT        /* Float token carries a float value */
 %token <str> ID         /* Identifier token carries a string */
-%token INT /* Keywords have no semantic value */
-%token FLOAT /* Keywords have no semantic value */
-%token PRINT /* Keywords have no semantic value */
+%token INT             /* Type keywords */
+%token FLOAT
+%token VOID
+%token PRINT           /* Statement keywords */
+%token RETURN
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program stmt_list stmt decl assign expr print_stmt
+%type <node> program func_list func param_list param stmt_list stmt decl assign expr print_stmt return_stmt func_call arg_list
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
 %left '+' '-'
@@ -52,102 +54,192 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
 
 /* PROGRAM RULE - Entry point of our grammar */
 program:
-    stmt_list { 
-        /* Action: Save the statement list as our AST root */
-        root = $1;  /* $1 refers to the first symbol (stmt_list) */
+    func_list { 
+        /* Action: Save the function list as our AST root */
+        root = $1;  /* $1 refers to the first symbol (func_list) */
     }
-    | stmt_list error          { root = $1; yyerrok; }
+    | func_list error          { root = $1; yyerrok; }
     ;
 
-/* STATEMENT LIST - Handles multiple statements */
+/* FUNCTION LIST RULES */
+func_list:
+    func { 
+        $$ = createStmtList($1, NULL);  /* Single function */
+    }
+    | func_list func { 
+        $$ = createStmtList($1, $2);  /* Multiple functions */
+    }
+    ;
+
+/* FUNCTION RULES */
+func:
+    INT ID '(' param_list ')' '{' stmt_list '}' { 
+        $$ = createFunc($2, TYPE_INT, $4, $7);  /* Function with return type and parameters */
+        addFunction($2, TYPE_INT, $$);         /* Add to global symbol table */
+        free($2);
+    }
+    | INT ID '(' ')' '{' stmt_list '}' { 
+        $$ = createFunc($2, TYPE_INT, NULL, $6);  /* Function with no parameters */
+        addFunction($2, TYPE_INT, $$);            /* Add to global symbol table */
+        free($2);
+    }
+    | FLOAT ID '(' param_list ')' '{' stmt_list '}' { 
+        $$ = createFunc($2, TYPE_FLOAT, $4, $7);  /* Float function with parameters */
+        addFunction($2, TYPE_FLOAT, $$);           /* Add to global symbol table */
+        free($2);
+    }
+    | FLOAT ID '(' ')' '{' stmt_list '}' { 
+        $$ = createFunc($2, TYPE_FLOAT, NULL, $6);  /* Float function with no parameters */
+        addFunction($2, TYPE_FLOAT, $$);            /* Add to global symbol table */
+        free($2);
+    }
+    | VOID ID '(' param_list ')' '{' stmt_list '}' { 
+        $$ = createFunc($2, TYPE_VOID, $4, $7);  /* Void function with parameters */
+        addFunction($2, TYPE_VOID, $$);           /* Add to global symbol table */
+        free($2);
+    }
+    | VOID ID '(' ')' '{' stmt_list '}' { 
+        $$ = createFunc($2, TYPE_VOID, NULL, $6);  /* Void function with no parameters */
+        addFunction($2, TYPE_VOID, $$);            /* Add to global symbol table */
+        free($2);
+    }
+    | error '}' { yyerrok; }
+    ;
+
+/* PARAMETER LIST RULES */
+param_list:
+    param { 
+        $$ = createParamList($1, NULL);  /* Single parameter */
+    }
+    | param_list ',' param { 
+        $$ = createParamList($1, $3);  /* Multiple parameters */
+    }
+    ;
+
+/* PARAMETER RULE */
+param:
+    INT ID { 
+        $$ = createParam($2, TYPE_INT);  /* Integer parameter */
+        free($2);
+    }
+    | FLOAT ID { 
+        $$ = createParam($2, TYPE_FLOAT);  /* Float parameter */
+        free($2);
+    }
+    ;
+
+/* STATEMENT LIST RULES */
 stmt_list:
     stmt { 
-        /* Base case: single statement */
-        $$ = $1;  /* Pass the statement up as-is */
+        $$ = $1;  /* Single statement */
     }
     | stmt_list stmt { 
-        /* Recursive case: list followed by another statement */
-        $$ = createStmtList($1, $2);  /* Build linked list of statements */
+        $$ = createStmtList($1, $2);  /* Multiple statements */
     }
     ;
 
-/* STATEMENT TYPES - The three kinds of statements we support */
+/* STATEMENT RULES */
 stmt:
     decl        /* Variable declaration */
     | assign    /* Assignment statement */
     | print_stmt /* Print statement */
+    | return_stmt /* Return statement */
     | error ';' { yyerrok; }
     | error { yyerrok; }
     ;
 
-/* DECLARATION RULE - "int x;" */
+/* DECLARATION RULES */
 decl:
     INT ID ';' { 
-        /* Add variable to symbol table before freeing the string */
-        addVar($2, TYPE_INT);                    /* Add the INT variable to symbol table */
-        /* Create declaration node and free the identifier string */
-        $$ = createDecl($2, TYPE_INT);  /* $2 is the ID token's string value */
+        addVar($2, TYPE_INT);                    
+        $$ = createDecl($2, TYPE_INT);  
         free($2);  
-        printSymTab();          /* Print symbol table for verification */
+        printSymTab();          
     }
     | FLOAT ID ';' { 
-        /* Add variable to symbol table before freeing the string */
-        addVar($2, TYPE_FLOAT); /* Add the FLOAT variable to symbol table */
-        /* Create declaration node and free the identifier string */
-        $$ = createDecl($2, TYPE_FLOAT); /* $2 is the ID token's string value */
-        free($2);                       /* Free the string copy from scanner */
-        printSymTab();          /* Print symbol table for verification */
+        addVar($2, TYPE_FLOAT); 
+        $$ = createDecl($2, TYPE_FLOAT); 
+        free($2);                       
+        printSymTab();          
     }
     ;
 
-/* ASSIGNMENT RULE - "x = expr;" */
+/* ASSIGNMENT RULE */
 assign:
     ID '=' expr ';' { 
-        /* Create assignment node with variable name and expression */
-        $$ = createAssign($1, $3);  /* $1 = ID, $3 = expr */
-        free($1);                   /* Free the identifier string */
+        $$ = createAssign($1, $3);  
+        free($1);                   
     }
     ;
 
-/* EXPRESSION RULES - Build expression trees */
+/* EXPRESSION RULES */
 expr:
     NUM { 
-        /* Literal number */
-        $$ = createNum($1);  /* Create leaf node with number value */
+        $$ = createNum($1);  
     }
     | FLT { 
-        $$ = createFlt($1);  // Add float literal handling
+        $$ = createFlt($1);  
     }
     | ID { 
-        /* Variable reference */
-        $$ = createVar($1);  /* Create leaf node with variable name */
-        free($1);            /* Free the identifier string */
+        $$ = createVar($1);  
+        free($1);            
+    }
+    | func_call { 
+        $$ = $1;  
     }
     | expr '+' expr { 
-        /* Addition operation - builds binary tree */
-        $$ = createBinOp('+', $1, $3);  /* Left child, op, right child */
+        $$ = createBinOp('+', $1, $3);  
     }
     | expr '-' expr { 
-        /* Subtraction operation - builds binary tree */
-        $$ = createBinOp('-', $1, $3);  /* Left child, op, right child */
+        $$ = createBinOp('-', $1, $3);  
     }
     | expr '*' expr { 
-        /* Multiplication operation - builds binary tree */
-        $$ = createBinOp('*', $1, $3);  /* Left child, op, right child */
+        $$ = createBinOp('*', $1, $3);  
     }
     | expr '/' expr { 
-        /* Division operation - builds binary tree */
-        $$ = createBinOp('/', $1, $3);  /* Left child, op, right child */
+        $$ = createBinOp('/', $1, $3);  
     }
     | '(' expr ')' {
         $$ = $2;
     }
     ;
-/* PRINT STATEMENT - "print(expr);" */
+
+/* PRINT STATEMENT */
 print_stmt:
     PRINT '(' expr ')' ';' { 
-        /* Create print node with expression to print */
-        $$ = createPrint($3);  /* $3 is the expression inside parens */
+        $$ = createPrint($3);  
+    }
+    ;
+
+/* RETURN STATEMENT */
+return_stmt:
+    RETURN expr ';' { 
+        $$ = createReturn($2);  
+    }
+    | RETURN ';' { 
+        $$ = createReturn(NULL);  
+    }
+    ;
+
+/* FUNCTION CALL RULES */
+func_call:
+    ID '(' arg_list ')' { 
+        $$ = createFuncCall($1, $3);  
+        free($1);
+    }
+    | ID '(' ')' { 
+        $$ = createFuncCall($1, NULL);  
+        free($1);
+    }
+    ;
+
+/* ARGUMENT LIST RULES */
+arg_list:
+    expr { 
+        $$ = createArgList($1, NULL);  /* Single argument */
+    }
+    | arg_list ',' expr { 
+        $$ = createArgList($1, $3);  /* Multiple arguments */
     }
     ;
 

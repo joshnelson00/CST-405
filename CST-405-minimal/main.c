@@ -4,11 +4,16 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "ast.h"
-#include "codegen.h"
-#include "tac.h"
-#include "optimizer.h"
 #include "symtab.h"
+#include "codegen.h"
+#include "optimizer.h"
+#include "tac.h"
+
+// External declarations for TAC lists
+extern TACList tacList;
+extern TACList optimizedList;
 
 extern int yyparse();
 extern FILE* yyin;
@@ -38,7 +43,8 @@ int main(int argc, char* argv[]) {
     printf("│ PHASE 0: VARIOUS INITIALIZATIONS                         │\n");
     printf("└──────────────────────────────────────────────────────────┘\n");
 
-    initSymTab();  /* Initialize symbol table */
+    initGlobalSymTab();  /* Initialize global symbol table */
+    initSymTab();        /* Initialize symbol table */
 
     /* PHASE 1: Lexical and Syntax Analysis */
     printf("┌──────────────────────────────────────────────────────────┐\n");
@@ -101,6 +107,10 @@ int main(int argc, char* argv[]) {
         generateMIPSFromOptimizedTAC(argv[2]);
         printf("✓ MIPS assembly code generated to: %s\n", argv[2]);
         printf("\n");
+        
+        // Clean up memory to prevent leaks
+        freeTACList(&tacList);
+        freeTACList(&optimizedList);
         
         printf("╔════════════════════════════════════════════════════════════╗\n");
         printf("║                  COMPILATION SUCCESSFUL!                   ║\n");

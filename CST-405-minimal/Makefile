@@ -46,7 +46,7 @@ mips.o: mips.c mips.h
 	$(CC) $(CFLAGS) -c mips.c
 
 clean:
-	rm -f $(TARGET) $(OBJS) lex.yy.c parser.tab.c parser.tab.h *.s
+	rm -f $(TARGET) $(OBJS) lex.yy.c parser.tab.c parser.tab.h *.s tac.txt tac-optimized.txt
 
 test: $(TARGET)
 	./$(TARGET) test.c test.s

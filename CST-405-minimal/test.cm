@@ -1,16 +1,15 @@
-int x;
-int y;
-int z;
-x = 3;
-y = x + 5;
-print(y);
+int add(int x, int y) {
+    int result;
+    result = x + y;
+    return result;
+}
 
-/* 
-* this
-* is
-* a
-* multiline
-* comment
-*/
+float multiply(float a, float b) {
+    return a * b;
+}
 
-/* this is a single line comment */
+void main() {
+    int sum;
+    sum = add(5, 3);
+    print(sum);
+}

@@ -24,6 +24,9 @@ typedef enum {
     MIPS_TRUNC_W_S, /* Truncate float to int: trunc.w.s $fdest, $fsrc */
     MIPS_MOVE,      /* Move register: move $dst, $src */
     MIPS_MOV_S,     /* Move float register: mov.s $fdst, $fsrc */
+    MIPS_JAL,       /* Jump and link: jal label */
+    MIPS_JR,        /* Jump register: jr $reg */
+    MIPS_LABEL,     /* Label: name: */
     MIPS_SYSCALL,   /* System call */
     MIPS_COMMENT    /* Comment line */
 } MIPSOp;
@@ -47,6 +50,7 @@ typedef struct {
 /* MIPS GENERATION FUNCTIONS */
 MIPSInstr* createMIPS(MIPSOp op, char* result, char* arg1, char* arg2, char* comment);
 void appendMIPS(MIPSList* list, MIPSInstr* instr);
+int countMIPSInstructions(MIPSList* list);
 void printMIPS(MIPSList* list, FILE* output);
 void freeMIPSList(MIPSList* list);
 

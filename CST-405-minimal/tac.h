@@ -11,14 +11,18 @@
 
 /* TAC INSTRUCTION TYPES */
 typedef enum {
-    TAC_ADD,     /* Addition: result = arg1 + arg2 */
+    TAC_ADD,         /* Addition: result = arg1 + arg2 */
     TAC_SUBTRACT,
     TAC_MULTIPLY,
     TAC_DIVIDE,
-    TAC_ASSIGN,  /* Assignment: result = arg1 */
-    TAC_PRINT,   /* Print: print(arg1) */
-    TAC_DECL     /* Declaration: declare result */
-    
+    TAC_ASSIGN,      /* Assignment: result = arg1 */
+    TAC_PRINT,       /* Print: print(arg1) */
+    TAC_DECL,        /* Declaration: declare result */
+    TAC_FUNC_DEF,    /* Function definition: func name */
+    TAC_FUNC_CALL,   /* Function call: result = call func(args) */
+    TAC_PARAM,       /* Function parameter: param name */
+    TAC_RETURN,      /* Return statement: return expr */
+    TAC_ARG          /* Function argument: arg expr */
 } TACOp;
 
 /* TAC INSTRUCTION STRUCTURE */
@@ -44,9 +48,12 @@ TACInstr* createTAC(TACOp op, char* arg1, char* arg2, char* result); /* Create T
 void appendTAC(TACInstr* instr);                                  /* Add instruction to list */
 void generateTAC(ASTNode* node);                                  /* Convert AST to TAC */
 char* generateTACExpr(ASTNode* node);                             /* Generate TAC for expression */
+char* generateTACFuncCall(ASTNode* node);                         /* Generate TAC for function call */
+void generateTACArgList(ASTNode* node);                           /* Generate TAC for argument list */
 
 /* TAC OUTPUT FUNCTIONS */
 void printTAC();                                                   /* Display unoptimized TAC */
 void appendOptimizedTAC(TACInstr* instr);                         /* Add instruction to optimized list */
+void freeTACList(TACList* list);                                  /* Free TAC instruction list memory */
 
 #endif

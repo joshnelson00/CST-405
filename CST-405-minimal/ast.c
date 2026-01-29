@@ -108,24 +108,140 @@ void printAST(ASTNode* node, int level) {
         case NODE_BINOP:
             printf("BINOP: %c\n", node->data.binop.op);
             printAST(node->data.binop.left, level + 1);
+            printf("  ");
             printAST(node->data.binop.right, level + 1);
             break;
         case NODE_DECL:
-            printf("DECL: %s (%s)\n", node->data.var.name, 
+            printf("DECL %s (%s)\n", node->data.var.name,
                    node->data.var.type == TYPE_FLOAT ? "float" : "int");
             break;
         case NODE_ASSIGN:
-            printf("ASSIGN: %s\n", node->data.assign.var);
+            printf("ASSIGN: %s = ", node->data.assign.var);
             printAST(node->data.assign.value, level + 1);
             break;
         case NODE_PRINT:
             printf("PRINT\n");
             printAST(node->data.expr, level + 1);
             break;
+        case NODE_RETURN:
+            printf("RETURN\n");
+            if (node->data.return_stmt.expr) {
+                printAST(node->data.return_stmt.expr, level + 1);
+            }
+            break;
+        case NODE_FUNC:
+            printf("FUNC: %s (%s)\n", node->data.func.name,
+                   node->data.func.return_type == TYPE_INT ? "int" :
+                   node->data.func.return_type == TYPE_FLOAT ? "float" : "void");
+            if (node->data.func.params) {
+                printAST(node->data.func.params, level + 1);
+            }
+            printAST(node->data.func.body, level + 1);
+            // Print next function if it exists
+            if (node->data.func.next) {
+                printAST(node->data.func.next, level);
+            }
+            break;
+        case NODE_FUNC_LIST:
+            printAST(node->data.func_list.func, level);
+            if (node->data.func_list.next) {
+                printAST(node->data.func_list.next, level);
+            }
+            break;
+        case NODE_PARAM:
+            printf("PARAM: %s (%s)\n", node->data.param.name,
+                   node->data.param.type == TYPE_INT ? "int" : "float");
+            break;
+        case NODE_PARAM_LIST:
+            printAST(node->data.param_list.param, level);
+            if (node->data.param_list.next) {
+                printAST(node->data.param_list.next, level);
+            }
+            break;
+        case NODE_FUNC_CALL:
+            printf("FUNC_CALL: %s\n", node->data.func_call.name);
+            if (node->data.func_call.args) {
+                printAST(node->data.func_call.args, level + 1);
+            }
+            break;
+        case NODE_ARG_LIST:
+            printAST(node->data.arg_list.arg, level);
+            if (node->data.arg_list.next) {
+                printAST(node->data.arg_list.next, level);
+            }
+            break;
         case NODE_STMT_LIST:
-            /* Print statements in sequence at same level */
             printAST(node->data.stmtlist.stmt, level);
-            printAST(node->data.stmtlist.next, level);
+            if (node->data.stmtlist.next) {
+                printAST(node->data.stmtlist.next, level);
+            }
+            break;
+        default:
+            printf("UNKNOWN NODE TYPE: %d\n", node->type);
             break;
     }
+}
+
+/* Create a return statement node */
+ASTNode* createReturn(ASTNode* expr) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_RETURN;
+    node->data.return_stmt.expr = expr;
+    return node;
+}
+
+/* Create a function definition node */
+ASTNode* createFunc(char* name, VarType return_type, ASTNode* params, ASTNode* body) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_FUNC;
+    node->data.func.name = strdup(name);
+    node->data.func.return_type = return_type;
+    node->data.func.params = params;
+    node->data.func.body = body;
+    return node;
+}
+
+/* Create a function parameter node */
+ASTNode* createParam(char* name, VarType type) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_PARAM;
+    node->data.param.name = strdup(name);
+    node->data.param.type = type;
+    return node;
+}
+
+/* Create a parameter list node */
+ASTNode* createParamList(ASTNode* param, ASTNode* next) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_PARAM_LIST;
+    node->data.param_list.param = param;
+    node->data.param_list.next = next;
+    return node;
+}
+
+/* Create a function call node */
+ASTNode* createFuncCall(char* name, ASTNode* args) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_FUNC_CALL;
+    node->data.func_call.name = strdup(name);
+    node->data.func_call.args = args;
+    return node;
+}
+
+/* Create an argument list node */
+ASTNode* createArgList(ASTNode* arg, ASTNode* next) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_ARG_LIST;
+    node->data.arg_list.arg = arg;
+    node->data.arg_list.next = next;
+    return node;
+}
+
+/* Create a function list node (links functions together) */
+ASTNode* createFuncList(ASTNode* func1, ASTNode* func2) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_FUNC_LIST;
+    node->data.func_list.func = func1;
+    node->data.func_list.next = func2;
+    return node;
 }

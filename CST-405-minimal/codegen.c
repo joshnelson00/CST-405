@@ -399,8 +399,8 @@ void generateMIPS(ASTNode* root, const char* filename) {
     ctx.floatConstCapacity = 0;
     ctx.floatConsts = NULL;
     
-    // Initialize symbol table
-    initSymTab();
+    // Symbol table already initialized during semantic phase
+    // DO NOT reinitialize - it would lose all variable declarations
     
     // First pass: collect all float constants
     collectFloatConsts(&ctx, root);

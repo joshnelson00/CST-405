@@ -18,8 +18,10 @@ int yycolumn = 1;
 "/*"([^*]|\*+[^*/])*\*+"/" {} // Anything between '/* ... */' is a comment
 
 "int"           { yycolumn += yyleng; return INT; }
-"float"           { yycolumn += yyleng; return FLOAT; }
+"float"         { yycolumn += yyleng; return FLOAT; }
+"void"          { yycolumn += yyleng; return VOID; }
 "print"         { yycolumn += yyleng; return PRINT; }
+"return"        { yycolumn += yyleng; return RETURN; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
     yylval.str = strdup(yytext);
@@ -42,8 +44,11 @@ int yycolumn = 1;
 "/"             { yycolumn++; return '/'; }
 "="             { yycolumn++; return '='; }
 ";"             { yycolumn++; return ';'; }
+","             { yycolumn++; return ','; }
 "("             { yycolumn++; return '('; }
 ")"             { yycolumn++; return ')'; }
+"{"             { yycolumn++; return '{'; }
+"}"             { yycolumn++; return '}'; }
 [ \t]+          { yycolumn += yyleng; }  /* Track spaces/tabs only */
 \n              { yyline++; yycolumn = 1; }  /* New line resets column */
 .               { 

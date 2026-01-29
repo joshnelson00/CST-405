@@ -1,9 +1,0 @@
-Unoptimized TAC Instructions:
-─────────────────────────────
- 1: DECL x          // Declare variable 'x'
- 2: DECL y          // Declare variable 'y'
- 3: DECL z          // Declare variable 'z'
- 4: x = 3           // Assign value to x
- 5: t0 = x + 5     // Add: store result in t0
- 6: y = t0           // Assign value to y
- 7: PRINT y          // Output value of y
