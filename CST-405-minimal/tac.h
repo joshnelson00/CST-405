@@ -22,7 +22,10 @@ typedef enum {
     TAC_FUNC_CALL,   /* Function call: result = call func(args) */
     TAC_PARAM,       /* Function parameter: param name */
     TAC_RETURN,      /* Return statement: return expr */
-    TAC_ARG          /* Function argument: arg expr */
+    TAC_ARG,         /* Function argument: arg expr */
+    TAC_ARRAY_DECL,  /* Array declaration: declare array name[size] */  
+    TAC_ARRAY_ASSIGN, /* Array assignment: name[index] = value */
+    TAC_ARRAY_ACCESS  /* Array access: result = name[index] */
 } TACOp;
 
 /* TAC INSTRUCTION STRUCTURE */

@@ -22,6 +22,8 @@ typedef struct {
     char* name;     /* Variable identifier */
     int offset;     /* Stack offset in bytes (for MIPS stack frame) */
     VarType type;   /* Variable type (int or float) */
+    int isArray;   /* Flag indicating if variable is an array */
+    int arraySize; /* Size of the array if isArray is true */
 } Symbol;
 
 /* SYMBOL TABLE STRUCTURE */
@@ -62,4 +64,7 @@ int isFunctionDeclared(char* name); /* Check if function exists */
 VarType getFunctionReturnType(char* name); /* Get function return type */
 void printSymTab();              /* Print current symbol table contents for tracing */
 void printGlobalSymTab();        /* Print global symbol table */
+int addArrayVar(char* name, VarType type, int size); /* Add array variable */
+int isArrayVar(char* name); /* Check if variable is an array */
+int getArraySize(char* name); /* Get size of array variable */
 #endif

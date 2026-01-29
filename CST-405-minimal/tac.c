@@ -99,6 +99,12 @@ char* generateTACExpr(ASTNode* node) {
             appendTAC(createTAC(TAC_FUNC_CALL, node->data.func_call.name, NULL, temp));
             return temp;
         }
+        case NODE_ARRAY_ACCESS: {
+            char* index = generateTACExpr(node->data.array_access.index);
+            char* temp = newTemp();
+            appendTAC(createTAC(TAC_ARRAY_ACCESS, node->data.array_access.name, index, temp));
+            return temp;
+        }
         default:
             return NULL;
     }
@@ -165,7 +171,17 @@ void generateTAC(ASTNode* node) {
         case NODE_ARG_LIST:
             generateTACArgList(node);
             break;
-
+        
+        case NODE_ARRAY_DECL:
+            appendTAC(createTAC(TAC_ARRAY_DECL, node->data.array_decl.name, NULL, NULL));
+            break;
+        
+        case NODE_ARRAY_ASSIGN: {
+            char* index = generateTACExpr(node->data.array_assign.index);
+            char* value = generateTACExpr(node->data.array_assign.value);
+            appendTAC(createTAC(TAC_ARRAY_ASSIGN, node->data.array_assign.name, index, value));
+            break;
+        }
         default:
             break;
     }
@@ -238,6 +254,17 @@ void printTACToFile(const char* filename) {
             case TAC_ARG:
                 fprintf(file, " %d: ARG %s            // Function argument\n", instrNum++, curr->arg1);
                 break;
+            case TAC_ARRAY_DECL:
+                fprintf(file, " %d: ARRAY_DECL %s     // Array declaration\n", instrNum++, curr->arg1);
+                break;
+            case TAC_ARRAY_ASSIGN:
+                fprintf(file, " %d: ARRAY_ASSIGN %s[%s] = %s      // Array assignment\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ARRAY_ACCESS:
+                fprintf(file, " %d: ARRAY_ACCESS %s[%s] -> %s    // Array access\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            default:
+                break;
         }
         curr = curr->next;
     }
@@ -269,6 +296,15 @@ void printTAC() {
                 else printf("RETURN\n");
                 break;
             case TAC_ARG: printf("ARG %s\n", curr->arg1); break;
+            case TAC_ARRAY_DECL:
+                printf("ARRAY_DECL %s\n", curr->arg1);
+                break;
+            case TAC_ARRAY_ASSIGN:
+                printf("ARRAY_ASSIGN %s[%s] = %s\n", curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ARRAY_ACCESS:
+                printf("ARRAY_ACCESS %s[%s] -> %s\n", curr->arg1, curr->arg2, curr->result);
+                break;
             default: break;
         }
         curr = curr->next;
@@ -290,4 +326,3 @@ void freeTACList(TACList* list) {
     list->head = list->tail = NULL;
     list->tempCount = 0;
 }
-

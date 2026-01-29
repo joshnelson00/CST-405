@@ -177,9 +177,9 @@ void printAST(ASTNode* node, int level) {
             }
             break;
         case NODE_ARRAY_DECL:
-            printf("ARRAY_DECL: %s [%d] (%s)\n", node->data.var.name,
+            printf("ARRAY_DECL: %s [%d] (%s)\n", node->data.array_decl.name,
                    node->data.array_decl.size,
-                   node->data.var.type == TYPE_FLOAT ? "float" : "int");
+                   node->data.array_decl.type == TYPE_FLOAT ? "float" : "int");
             break;
         case NODE_ARRAY_ASSIGN:
             printf("ARRAY_ASSIGN: %s[...]=...\n", node->data.array_assign.name);
@@ -263,9 +263,9 @@ ASTNode* createFuncList(ASTNode* func1, ASTNode* func2) {
 ASTNode* createArrayDecl(char* name, VarType type, int size) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_ARRAY_DECL;
-    node->data.var.name = strdup(name);  /* Store array name */
-    node->data.var.type = type;          /* Store array type */
-    /* Size can be stored in a separate field if needed */
+    node->data.array_decl.name = strdup(name);  /* Store array name */
+    node->data.array_decl.type = type;          /* Store array type */
+    node->data.array_decl.size = size;
     return node;
 }
 

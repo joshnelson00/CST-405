@@ -197,3 +197,59 @@ void printGlobalSymTab() {
     printf("==========================\n");
 }
 
+int addArrayVar(char* name, VarType type, int size) {
+    if (!currentSymTab) {
+        fprintf(stderr, "❌ Error: No active symbol table\n");
+        return -1;
+    }
+
+    if (isVarDeclared(name)) {
+        fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Variable '%s' already declared\n", name);
+        return -1;
+    }
+
+    if (currentSymTab->count >= MAX_VARS) {
+        fprintf(stderr, "❌ Error: Symbol table full (max %d variables)\n", MAX_VARS);
+        return -1;
+    }
+
+    Symbol* entry = &currentSymTab->vars[currentSymTab->count];
+    entry->name = strdup(name);
+    entry->type = type;
+    entry->isArray = 1;
+    entry->arraySize = size;
+    entry->offset = currentSymTab->nextOffset;
+    currentSymTab->nextOffset += 4 * size; // allocate space for the entire array
+    currentSymTab->count++;
+
+    printf("SYMBOL TABLE: Added array '%s' (%s[%d]) at offset %d\n", 
+           name,
+           type == TYPE_FLOAT ? "float" : type == TYPE_VOID ? "void" : "int",
+           size,
+           entry->offset);
+
+    return entry->offset;
+}
+
+int isArrayVar(char* name) {
+    if (!currentSymTab) return 0;
+
+    for (int i = 0; i < currentSymTab->count; i++) {
+        if (strcmp(currentSymTab->vars[i].name, name) == 0) {
+            return currentSymTab->vars[i].isArray;
+        }
+    }
+    return 0;
+}
+
+int getArraySize(char* name) {
+    if (!currentSymTab) return -1;
+
+    for (int i = 0; i < currentSymTab->count; i++) {
+        if (strcmp(currentSymTab->vars[i].name, name) == 0 && currentSymTab->vars[i].isArray) {
+            return currentSymTab->vars[i].arraySize;
+        }
+    }
+    return -1;
+}
