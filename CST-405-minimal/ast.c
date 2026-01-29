@@ -176,6 +176,20 @@ void printAST(ASTNode* node, int level) {
                 printAST(node->data.stmtlist.next, level);
             }
             break;
+        case NODE_ARRAY_DECL:
+            printf("ARRAY_DECL: %s [%d] (%s)\n", node->data.var.name,
+                   node->data.array_decl.size,
+                   node->data.var.type == TYPE_FLOAT ? "float" : "int");
+            break;
+        case NODE_ARRAY_ASSIGN:
+            printf("ARRAY_ASSIGN: %s[...]=...\n", node->data.array_assign.name);
+            printAST(node->data.array_assign.index, level + 1);
+            printAST(node->data.array_assign.value, level + 1);
+            break;
+        case NODE_ARRAY_ACCESS:
+            printf("ARRAY_ACCESS: %s[...]\n", node->data.array_access.name);
+            printAST(node->data.array_access.index, level + 1);
+            break;
         default:
             printf("UNKNOWN NODE TYPE: %d\n", node->type);
             break;
@@ -243,5 +257,31 @@ ASTNode* createFuncList(ASTNode* func1, ASTNode* func2) {
     node->type = NODE_FUNC_LIST;
     node->data.func_list.func = func1;
     node->data.func_list.next = func2;
+    return node;
+}
+
+ASTNode* createArrayDecl(char* name, VarType type, int size) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_ARRAY_DECL;
+    node->data.var.name = strdup(name);  /* Store array name */
+    node->data.var.type = type;          /* Store array type */
+    /* Size can be stored in a separate field if needed */
+    return node;
+}
+
+ASTNode* createArrayAssign(char* name, ASTNode* index, ASTNode* value) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_ARRAY_ASSIGN;
+    node->data.array_assign.name = strdup(name); /* Array name */
+    node->data.array_assign.index = index;       /* Index expression */
+    node->data.array_assign.value = value;       /* Value expression */
+    return node;
+}
+
+ASTNode* createArrayAccess(char* name, ASTNode* index) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_ARRAY_ACCESS;
+    node->data.array_access.name = strdup(name); /* Array name */
+    node->data.array_access.index = index;       /* Index expression */
     return node;
 }
