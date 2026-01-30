@@ -1,7 +1,7 @@
 
 ## Team Members
 
-### Joshua Nelson
+### Josh Nelson
 **Major:** Computer Science (Emphasis in Big Data Analytics)  
 **Year:** Junior (Expected Graduation: April 2027)  
 
