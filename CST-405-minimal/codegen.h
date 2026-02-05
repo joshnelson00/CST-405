@@ -8,6 +8,7 @@
 typedef struct {
     int reg;        // register index
     VarType type;   // TYPE_INT or TYPE_FLOAT
+    int is_pinned;  // 1 if register is a cached variable register
 } ExprResult;
 
 // Register pool for better resource management

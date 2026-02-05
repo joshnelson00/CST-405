@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "symtab.h"
+#include "stringpool.h"
 /* External declarations for line tracking */
 extern int yyline;
 /* Global symbol table instance */
@@ -54,7 +55,7 @@ int addVar(char* name, VarType type) {
     }
     // Add new node
     SymbolNode* newNode = malloc(sizeof(SymbolNode));
-    newNode->name = strdup(name);
+    newNode->name = intern_string(name);
     newNode->offset = symtab.nextOffset;
     newNode->type = type;
     newNode->next = symtab.buckets[h];

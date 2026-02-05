@@ -1,12 +1,124 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include "codegen.h"
 #include "ast.h"
 #include "symtab.h"
 
 /* External declarations for line tracking */
 extern int yyline;
+
+// Register allocator (simple LRU for $t0-$t7)
+typedef struct {
+    int reg_index;
+    char* var_name;  // Variable currently in this register
+    int is_free;
+    int last_used;   // For LRU eviction
+} Register;
+
+typedef struct {
+    Register temp_regs[8];  // $t0-$t7
+    int clock;              // For LRU tracking
+} RegisterAllocator;
+
+static RegisterAllocator reg_alloc;
+
+static void init_register_allocator() {
+    for (int i = 0; i < 8; i++) {
+        reg_alloc.temp_regs[i].reg_index = i;
+        reg_alloc.temp_regs[i].is_free = 1;
+        reg_alloc.temp_regs[i].var_name = NULL;
+        reg_alloc.temp_regs[i].last_used = 0;
+    }
+    reg_alloc.clock = 0;
+}
+
+static int find_var_reg(const char* var) {
+    for (int i = 0; i < 8; i++) {
+        if (reg_alloc.temp_regs[i].var_name &&
+            strcmp(reg_alloc.temp_regs[i].var_name, var) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void invalidate_var_cache(CodeGenContext* ctx, const char* var) {
+    int idx = find_var_reg(var);
+    if (idx >= 0) {
+        free(reg_alloc.temp_regs[idx].var_name);
+        reg_alloc.temp_regs[idx].var_name = NULL;
+        reg_alloc.temp_regs[idx].is_free = 1;
+        ctx->regPool.tempRegs[idx] = false;
+    }
+}
+
+static int allocate_var_reg(CodeGenContext* ctx, const char* var, int* pinned) {
+    // Already cached
+    int idx = find_var_reg(var);
+    if (idx >= 0) {
+        reg_alloc.temp_regs[idx].last_used = reg_alloc.clock++;
+        if (pinned) *pinned = 1;
+        return reg_alloc.temp_regs[idx].reg_index;
+    }
+
+    // Find a free register not used by temp pool
+    for (int i = 0; i < 8; i++) {
+        if (reg_alloc.temp_regs[i].is_free && !ctx->regPool.tempRegs[i]) {
+            reg_alloc.temp_regs[i].is_free = 0;
+            reg_alloc.temp_regs[i].var_name = strdup(var);
+            reg_alloc.temp_regs[i].last_used = reg_alloc.clock++;
+            ctx->regPool.tempRegs[i] = true;
+
+            if (isVarDeclared((char*)var)) {
+                int offset = getVarOffset((char*)var);
+                fprintf(ctx->output, "    lw $t%d, %d($sp)\n", i, offset);
+            }
+            if (pinned) *pinned = 1;
+            return i;
+        }
+    }
+
+    // Evict LRU cached var
+    int lru_idx = -1;
+    int min_time = INT_MAX;
+    for (int i = 0; i < 8; i++) {
+        if (!reg_alloc.temp_regs[i].is_free &&
+            reg_alloc.temp_regs[i].last_used < min_time) {
+            min_time = reg_alloc.temp_regs[i].last_used;
+            lru_idx = i;
+        }
+    }
+
+    if (lru_idx >= 0) {
+        if (reg_alloc.temp_regs[lru_idx].var_name) {
+            int offset = getVarOffset(reg_alloc.temp_regs[lru_idx].var_name);
+            fprintf(ctx->output, "    sw $t%d, %d($sp)\n", lru_idx, offset);
+            free(reg_alloc.temp_regs[lru_idx].var_name);
+        }
+
+        reg_alloc.temp_regs[lru_idx].var_name = strdup(var);
+        reg_alloc.temp_regs[lru_idx].last_used = reg_alloc.clock++;
+        reg_alloc.temp_regs[lru_idx].is_free = 0;
+        ctx->regPool.tempRegs[lru_idx] = true;
+
+        if (isVarDeclared((char*)var)) {
+            int offset = getVarOffset((char*)var);
+            fprintf(ctx->output, "    lw $t%d, %d($sp)\n", lru_idx, offset);
+        }
+
+        if (pinned) *pinned = 1;
+        return lru_idx;
+    }
+
+    // Fallback: allocate a temp register and load (not cached)
+    int temp_reg = allocateTempReg(&ctx->regPool);
+    int offset = getVarOffset((char*)var);
+    fprintf(ctx->output, "    lw $t%d, %d($sp)\n", temp_reg, offset);
+    if (pinned) *pinned = 0;
+    return temp_reg;
+}
 
 // Register pool management functions
 void initRegisterPool(RegisterPool* pool) {
@@ -131,6 +243,7 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
     if (!node) {
         res.reg = -1;
         res.type = TYPE_INT;
+        res.is_pinned = 0;
         return res;
     }
 
@@ -139,6 +252,7 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
         case NODE_NUM: {
             res.reg = allocateTempReg(&ctx->regPool);
             res.type = TYPE_INT;
+            res.is_pinned = 0;
             fprintf(ctx->output, "    li $t%d, %d\n", res.reg, node->data.num);
             return res;
         }
@@ -146,6 +260,7 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
         case NODE_FLT: {
             res.reg = allocateFloatReg(&ctx->regPool);
             res.type = TYPE_FLOAT;
+            res.is_pinned = 0;
             int id = getFloatConstID(ctx, node->data.flt);
             fprintf(ctx->output, "    l.s $f%d, flt_%d\n", res.reg, id);
             return res;
@@ -161,13 +276,15 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
             }
 
             res.type = t;
+            res.is_pinned = 0;
 
             if (t == TYPE_FLOAT) {
                 res.reg = allocateFloatReg(&ctx->regPool);
                 fprintf(ctx->output, "    l.s $f%d, %d($sp)\n", res.reg, offset);
             } else {
-                res.reg = allocateTempReg(&ctx->regPool);
-                fprintf(ctx->output, "    lw $t%d, %d($sp)\n", res.reg, offset);
+                int pinned = 0;
+                res.reg = allocate_var_reg(ctx, node->data.var.name, &pinned);
+                res.is_pinned = pinned;
             }
 
             return res;
@@ -180,6 +297,7 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
             // Result type promotion
             if (L.type == TYPE_FLOAT || R.type == TYPE_FLOAT) {
                 res.type = TYPE_FLOAT;
+                res.is_pinned = 0;
 
                 int lf = L.reg;
                 int rf = R.reg;
@@ -189,14 +307,14 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
                     lf = allocateFloatReg(&ctx->regPool);
                     fprintf(ctx->output, "    mtc1 $t%d, $f%d\n", L.reg, lf);
                     fprintf(ctx->output, "    cvt.s.w $f%d, $f%d\n", lf, lf);
-                    releaseTempReg(&ctx->regPool, L.reg);
+                    if (!L.is_pinned) releaseTempReg(&ctx->regPool, L.reg);
                 }
 
                 if (R.type == TYPE_INT) {
                     rf = allocateFloatReg(&ctx->regPool);
                     fprintf(ctx->output, "    mtc1 $t%d, $f%d\n", R.reg, rf);
                     fprintf(ctx->output, "    cvt.s.w $f%d, $f%d\n", rf, rf);
-                    releaseTempReg(&ctx->regPool, R.reg);
+                    if (!R.is_pinned) releaseTempReg(&ctx->regPool, R.reg);
                 }
 
                 res.reg = allocateFloatReg(&ctx->regPool);
@@ -229,6 +347,7 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
             // Integer-only path
             res.type = TYPE_INT;
             res.reg = allocateTempReg(&ctx->regPool);
+            res.is_pinned = 0;
 
             switch (node->data.binop.op) {
                 case '+':
@@ -251,8 +370,8 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
             }
 
             // Release operand registers
-            releaseTempReg(&ctx->regPool, L.reg);
-            releaseTempReg(&ctx->regPool, R.reg);
+            if (!L.is_pinned) releaseTempReg(&ctx->regPool, L.reg);
+            if (!R.is_pinned) releaseTempReg(&ctx->regPool, R.reg);
 
             return res;
         }
@@ -260,6 +379,7 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
         default:
             res.reg = -1;
             res.type = TYPE_INT;
+            res.is_pinned = 0;
             return res;
     }
 }
@@ -302,7 +422,10 @@ void genStmt(CodeGenContext* ctx, ASTNode* node) {
                     releaseFloatReg(&ctx->regPool, val.reg);
                 } else {
                     fprintf(ctx->output, "    sw $t%d, %d($sp)\n", val.reg, offset);
-                    releaseTempReg(&ctx->regPool, val.reg);
+                    if (!val.is_pinned) releaseTempReg(&ctx->regPool, val.reg);
+                }
+                if (varType == TYPE_INT) {
+                    invalidate_var_cache(ctx, node->data.assign.var);
                 }
                 break;
             }
@@ -313,8 +436,9 @@ void genStmt(CodeGenContext* ctx, ASTNode* node) {
                 fprintf(ctx->output, "    mtc1 $t%d, $f%d\n", val.reg, ftmp);
                 fprintf(ctx->output, "    cvt.s.w $f%d, $f%d\n", ftmp, ftmp);
                 fprintf(ctx->output, "    s.s $f%d, %d($sp)\n", ftmp, offset);
-                releaseTempReg(&ctx->regPool, val.reg);
+                if (!val.is_pinned) releaseTempReg(&ctx->regPool, val.reg);
                 releaseFloatReg(&ctx->regPool, ftmp);
+                invalidate_var_cache(ctx, node->data.assign.var);
                 break;
             }
             
@@ -326,6 +450,7 @@ void genStmt(CodeGenContext* ctx, ASTNode* node) {
                 fprintf(ctx->output, "    sw $t%d, %d($sp)\n", itmp, offset);
                 releaseFloatReg(&ctx->regPool, val.reg);
                 releaseTempReg(&ctx->regPool, itmp);
+                invalidate_var_cache(ctx, node->data.assign.var);
                 break;
             }
             
@@ -361,7 +486,7 @@ void genStmt(CodeGenContext* ctx, ASTNode* node) {
                 fprintf(ctx->output, "    move $a0, $t%d\n", val.reg);
                 fprintf(ctx->output, "    li $v0, 1\n");
                 fprintf(ctx->output, "    syscall\n");
-                releaseTempReg(&ctx->regPool, val.reg);
+                if (!val.is_pinned) releaseTempReg(&ctx->regPool, val.reg);
             }
 
             // newline
@@ -392,6 +517,7 @@ void generateMIPS(ASTNode* root, const char* filename) {
     
     // Initialize register pool
     initRegisterPool(&ctx.regPool);
+    init_register_allocator();
     
     // Initialize float constants
     ctx.floatConstCount = 0;

@@ -70,6 +70,7 @@ typedef struct ASTNode {
 /* AST CONSTRUCTION FUNCTIONS
  * These functions are called by the parser to build the tree
  */
+void init_ast_memory();                                         /* Initialize AST memory pool */
 ASTNode* createNum(int value);                                   /* Create number node */
 ASTNode* createFlt(double value);                                   /* Create float node */ 
 ASTNode* createVar(char* name);                                  /* Create variable node */

@@ -11,6 +11,7 @@
 #include "symtab.h"
 #include "semantic.h"
 #include "benchmark.h"
+#include "stringpool.h"
 
 extern SymbolTable symtab;
 

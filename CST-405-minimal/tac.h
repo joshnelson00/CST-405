@@ -17,7 +17,8 @@ typedef enum {
     TAC_DIVIDE,
     TAC_ASSIGN,  /* Assignment: result = arg1 */
     TAC_PRINT,   /* Print: print(arg1) */
-    TAC_DECL     /* Declaration: declare result */
+    TAC_DECL,    /* Declaration: declare result */
+    TAC_NOP      /* No-op (used during optimization passes) */
     
 } TACOp;
 

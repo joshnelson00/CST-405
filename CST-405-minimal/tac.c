@@ -7,6 +7,15 @@
 TACList tacList;
 TACList optimizedList;
 
+// Peephole optimization stats
+typedef struct {
+    int eliminated_temps;
+    int constant_folded;
+    int dead_code_removed;
+} OptimizationStats;
+
+static OptimizationStats opt_stats = {0};
+
 void initTAC() {
     tacList.head = NULL;
     tacList.tail = NULL;
@@ -55,6 +64,98 @@ int isConst(const char* s) {
     char* end;
     strtod(s, &end);
     return *end == '\0';
+}
+
+static void removeNOPs() {
+    TACInstr* current = tacList.head;
+    TACInstr* prev = NULL;
+
+    while (current) {
+        if (current->op == TAC_NOP) {
+            TACInstr* toDelete = current;
+            if (prev) {
+                prev->next = current->next;
+                current = current->next;
+            } else {
+                tacList.head = current->next;
+                current = current->next;
+            }
+
+            if (toDelete == tacList.tail) {
+                tacList.tail = prev;
+            }
+
+            opt_stats.dead_code_removed++;
+            // Note: In production, should free toDelete
+        } else {
+            prev = current;
+            current = current->next;
+        }
+    }
+
+    if (!tacList.head) {
+        tacList.tail = NULL;
+    }
+}
+
+static void peepholeOptimizeTAC() {
+    TACInstr* current = tacList.head;
+
+    while (current && current->next) {
+        // Pattern 1: Constant folding for temp additions
+        // t0 = 5; t1 = 10; t2 = t0 + t1; => t2 = 15;
+        if (current->op == TAC_ASSIGN &&
+            current->next->op == TAC_ASSIGN &&
+            isConst(current->arg1) &&
+            isConst(current->next->arg1)) {
+
+            TACInstr* third = current->next->next;
+            if (third && third->op == TAC_ADD &&
+                third->arg1 && third->arg2 &&
+                current->result && current->next->result &&
+                strcmp(third->arg1, current->result) == 0 &&
+                strcmp(third->arg2, current->next->result) == 0) {
+
+                int val1 = atoi(current->arg1);
+                int val2 = atoi(current->next->arg1);
+                char buffer[32];
+                sprintf(buffer, "%d", val1 + val2);
+
+                // Replace with single assignment
+                third->op = TAC_ASSIGN;
+                if (third->arg1) free(third->arg1);
+                third->arg1 = strdup(buffer);
+                if (third->arg2) {
+                    free(third->arg2);
+                    third->arg2 = NULL;
+                }
+
+                // Remove redundant instructions
+                current->op = TAC_NOP;  // Mark for removal
+                current->next->op = TAC_NOP;
+
+                opt_stats.constant_folded++;
+            }
+        }
+
+        // Pattern 2: Copy propagation
+        // t0 = x; y = t0; => y = x;
+        if (current->op == TAC_ASSIGN &&
+            current->next->op == TAC_ASSIGN &&
+            current->result && current->next->arg1 &&
+            strcmp(current->next->arg1, current->result) == 0) {
+
+            free(current->next->arg1);
+            current->next->arg1 = current->arg1 ? strdup(current->arg1) : NULL;
+            current->op = TAC_NOP;
+            opt_stats.eliminated_temps++;
+        }
+
+        current = current->next;
+    }
+
+    // Remove NOP instructions
+    removeNOPs();
 }
 
 char* generateTACExpr(ASTNode* node) {
@@ -164,6 +265,9 @@ void printTAC() {
                 printf("PRINT %s", curr->arg1);
                 printf("          // Output value of %s\n", curr->arg1);
                 break;
+            case TAC_NOP:
+                printf("NOP\n");
+                break;
             default:
                 break;
         }
@@ -173,6 +277,17 @@ void printTAC() {
 
 // Simple optimization: constant folding and copy propagation
 void optimizeTAC() {
+    opt_stats.eliminated_temps = 0;
+    opt_stats.constant_folded = 0;
+    opt_stats.dead_code_removed = 0;
+
+    // Peephole pass works in-place on tacList
+    peepholeOptimizeTAC();
+
+    // Reset optimized list before rebuilding
+    optimizedList.head = NULL;
+    optimizedList.tail = NULL;
+
     TACInstr* curr = tacList.head;
     
     // Copy propagation table
@@ -365,6 +480,9 @@ void optimizeTAC() {
                 newInstr = createTAC(TAC_PRINT, value, NULL, NULL);
                 break;
             }
+            case TAC_NOP:
+                // Ignore (shouldn't be present after peephole removal)
+                break;
         }
         
         if (newInstr) {
@@ -415,6 +533,9 @@ void printOptimizedTAC() {
                 } else {
                     printf("          // Print variable\n");
                 }
+                break;
+            case TAC_NOP:
+                printf("NOP\n");
                 break;
             default:
                 break;

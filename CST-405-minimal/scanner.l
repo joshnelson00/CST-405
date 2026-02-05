@@ -5,22 +5,55 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "parser.tab.h"  /* Token definitions from Bison */
 /* Values for tracking current location (for errors)*/
 int yyline = 1;
 int yycolumn = 1;
+
+// Increase buffer size for better I/O performance
+#define YY_BUF_SIZE 32768  // 32KB instead of default 8KB
+
+// Keyword hash table for O(1) lookup (small set here)
+struct keyword {
+    const char* word;
+    int token;
+};
+
+#define NUM_KEYWORDS 3
+static struct keyword keywords[] = {
+    {"int", INT},
+    {"float", FLOAT},
+    {"print", PRINT}
+};
+
+// Simple hash for our keyword set
+static int keyword_hash(const char* str) {
+    int len = (int)strlen(str);
+    return (len + (unsigned char)str[0]) % 13;
+}
+
+static int check_keyword(const char* str) {
+    (void)keyword_hash(str); // keep hash in case you expand this to a real table
+    for (int i = 0; i < NUM_KEYWORDS; i++) {
+        if (strcmp(keywords[i].word, str) == 0) {
+            return keywords[i].token;
+        }
+    }
+    return ID;  // Not a keyword, must be identifier
+}
 %}
 /* Flex options to suppress warnings for unused functions */
 %option nounput
 %option noinput
 %%
-"int"           { yycolumn += yyleng; return INT; }
-"float"           { yycolumn += yyleng; return FLOAT; }
-"print"         { yycolumn += yyleng; return PRINT; }
 [a-zA-Z_][a-zA-Z0-9_]* { 
-    yylval.str = strdup(yytext);
+    int token = check_keyword(yytext);
+    if (token == ID) {
+        yylval.str = strdup(yytext);
+    }
     yycolumn += yyleng;
-    return ID; 
+    return token; 
 }
 [0-9]+\.[0-9]+ {
     yylval.num = atof(yytext);  // Use atof for floats
