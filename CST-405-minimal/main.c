@@ -76,6 +76,7 @@ int main(int argc, char* argv[]) {
     printf("└──────────────────────────────────────────────────────────┘\n");
 
     initSymTab();  /* Initialize symbol table */
+    init_string_pool(); /* Initialize string pool used by symbol table */
 
     /* PHASE 1: Lexical and Syntax Analysis */
     printf("┌──────────────────────────────────────────────────────────┐\n");
