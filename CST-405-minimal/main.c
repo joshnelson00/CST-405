@@ -4,11 +4,47 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "ast.h"
 #include "codegen.h"
 #include "tac.h"
 #include "symtab.h"
 #include "semantic.h"
+#include "benchmark.h"
+
+extern SymbolTable symtab;
+
+void test_symbol_table_performance() {
+    setSymTabVerbose(0);
+    initSymTab();
+    srand(12345);
+
+    // Test with 1000 variables
+    BenchmarkResult* insert_bench = start_benchmark();
+    for(int i = 0; i < 1000; i++) {
+        char varname[20];
+        sprintf(varname, "var_%d", i);
+        addVar(varname, TYPE_INT);
+    }
+    end_benchmark(insert_bench, "Symbol Table Insert");
+    free(insert_bench);
+
+    // Test lookups
+    symtab.lookups = 0;
+    BenchmarkResult* lookup_bench = start_benchmark();
+    for(int i = 0; i < 10000; i++) {
+        char varname[20];
+        sprintf(varname, "var_%d", rand() % 1000);
+        getVarOffset(varname);
+    }
+    end_benchmark(lookup_bench, "Symbol Table Lookup");
+    free(lookup_bench);
+
+    printf("Entries: %d\n", symtab.count);
+    printf("Collisions: %d\n", symtab.collisions);
+    printf("Lookups: %d\n", symtab.lookups);
+    printf("Load factor: %.3f\n", (double)symtab.count / HASH_SIZE);
+}
 
 extern int yyparse();
 extern FILE* yyin;
@@ -146,5 +182,7 @@ int main(int argc, char* argv[]) {
     }
     
     fclose(yyin);
+    printf("\nRunning symbol table performance test...\n");
+    test_symbol_table_performance();
     return 0;
 }
