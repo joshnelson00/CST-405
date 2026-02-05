@@ -7,92 +7,20 @@
 #include <string.h>
 #include "ast.h"
 #include "symtab.h"
-#include "stringpool.h"
 
-// Memory pool structure
 #define POOL_SIZE 4096  // Allocate in 4KB chunks
 #define MAX_POOLS 100
 
-typedef struct MemPool {
-    char* memory;
-    size_t used;
-    size_t size;
-    struct MemPool* next;
-} MemPool;
-
-typedef struct {
-    MemPool* current;
-    MemPool* head;
-    int total_allocations;
-    int pool_count;
-    size_t total_memory;
-} ASTMemoryManager;
-
-static ASTMemoryManager ast_mem = {0};
-
-// Initialize memory pool
-void init_ast_memory() {
-    ast_mem.head = malloc(sizeof(MemPool));
-    ast_mem.head->memory = malloc(POOL_SIZE);
-    ast_mem.head->used = 0;
-    ast_mem.head->size = POOL_SIZE;
-    ast_mem.head->next = NULL;
-    ast_mem.current = ast_mem.head;
-    ast_mem.pool_count = 1;
-    ast_mem.total_memory = POOL_SIZE;
-}
-
-// Allocate from pool
-static void* ast_alloc(size_t size) {
-    // Lazy init if caller didn't initialize
-    if (!ast_mem.current) {
-        init_ast_memory();
-    }
-
-    // Align to 8 bytes for better performance
-    size = (size + 7) & ~7;
-
-    if (ast_mem.current->used + size > ast_mem.current->size) {
-        if (ast_mem.pool_count >= MAX_POOLS) {
-            return NULL;
-        }
-
-        // Need new pool
-        MemPool* new_pool = malloc(sizeof(MemPool));
-        new_pool->memory = malloc(POOL_SIZE);
-        new_pool->used = 0;
-        new_pool->size = POOL_SIZE;
-        new_pool->next = NULL;
-
-        ast_mem.current->next = new_pool;
-        ast_mem.current = new_pool;
-        ast_mem.pool_count++;
-        ast_mem.total_memory += POOL_SIZE;
-    }
-
-    void* ptr = ast_mem.current->memory + ast_mem.current->used;
-    ast_mem.current->used += size;
-    ast_mem.total_allocations++;
-
-    return ptr;
-}
-
 /* Create a number literal node */
 ASTNode* createNum(int value) {
-    ASTNode* node = (ASTNode*)ast_alloc(sizeof(ASTNode));
-    if (!node) {
-        return NULL;
-    }
+    ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_NUM;
     node->data.num = value;  /* Store the integer value */
     return node;
 }
 
 ASTNode* createFlt(double value) {
-    ASTNode* node = (ASTNode*)ast_alloc(sizeof(ASTNode));
-    if (!node) {
-        return NULL;
-    }
+    ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_FLT;
     node->data.flt = (float)value;
     return node;
@@ -100,21 +28,15 @@ ASTNode* createFlt(double value) {
 
 /* Create a variable reference node */
 ASTNode* createVar(char* name) {
-    ASTNode* node = (ASTNode*)ast_alloc(sizeof(ASTNode));
-    if (!node) {
-        return NULL;
-    }
+    ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_VAR;
-    node->data.var.name = intern_string(name);  /* Intern the variable name */
+    node->data.var.name = strdup(name);  /* Copy the variable name */
     node->data.var.type = getVarType(name);       /* Default type for variables */
     return node;
 }
 /* Create a binary operation node (for addition) */
 ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right) {
-    ASTNode* node = (ASTNode*)ast_alloc(sizeof(ASTNode));
-    if (!node) {
-        return NULL;
-    }
+    ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_BINOP;
     node->data.binop.op = op;        /* Store operator (+) */
     node->data.binop.left = left;    /* Left subtree */
@@ -124,12 +46,9 @@ ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right) {
 
 /* Create a variable declaration node */
 ASTNode* createDecl(char* name, VarType type) {
-    ASTNode* node = (ASTNode*)ast_alloc(sizeof(ASTNode));
-    if (!node) {
-        return NULL;
-    }
+    ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_DECL;
-    node->data.var.name = intern_string(name);  /* Intern variable name */
+    node->data.var.name = strdup(name);  /* Store variable name */
     node->data.var.type = type;          /* Store variable type */
     return node;
 }
@@ -147,22 +66,16 @@ ASTNode* createDeclWithAssgn(char* name, int value) {
 
 /* Create an assignment statement node */
 ASTNode* createAssign(char* var, ASTNode* value) {
-    ASTNode* node = (ASTNode*)ast_alloc(sizeof(ASTNode));
-    if (!node) {
-        return NULL;
-    }
+    ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_ASSIGN;
-    node->data.assign.var = intern_string(var);  /* Intern variable name */
+    node->data.assign.var = strdup(var);  /* Variable name */
     node->data.assign.value = value;      /* Expression tree */
     return node;
 }
 
 /* Create a print statement node */
 ASTNode* createPrint(ASTNode* expr) {
-    ASTNode* node = (ASTNode*)ast_alloc(sizeof(ASTNode));
-    if (!node) {
-        return NULL;
-    }
+    ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_PRINT;
     node->data.expr = expr;  /* Expression to print */
     return node;
