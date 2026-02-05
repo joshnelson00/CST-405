@@ -16,8 +16,11 @@ typedef enum {
     TAC_MULTIPLY,
     TAC_DIVIDE,
     TAC_ASSIGN,      /* Assignment: result = arg1 */
+    TAC_ARRAY_WRITE, /* Array write: arr[arg1] = arg2 */
+    TAC_ARRAY_READ,  /* Array read: result = arr[arg1] */
     TAC_PRINT,       /* Print: print(arg1) */
     TAC_DECL,        /* Declaration: declare result */
+    TAC_ARRAY_DECL,  /* Array declaration: declare result[size] */
     TAC_FUNC_DEF,    /* Function definition: func name */
     TAC_FUNC_CALL,   /* Function call: result = call func(args) */
     TAC_PARAM,       /* Function parameter: param name */

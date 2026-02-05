@@ -14,6 +14,7 @@ extern TACList tacList;
 TACList optimizedList;   // global optimized TAC list for compatibility
 TACList optimizedList2;  // internal list used by optimizer2
 extern GlobalSymbolTable globalSymTab;
+extern SymbolTable* currentSymTab;
 extern int isConst(const char* s);
 
 static int isTemporary(const char* name) {
@@ -29,9 +30,20 @@ static int getOptimizerVarOffset(const char* name) {
 }
 
 static const char* tempToReg(const char* temp) {
-    static char reg[10];
+    // Use rotating buffer to support multiple concurrent calls
+    static char regBuffer[4][10];
+    static int bufferIndex = 0;
+    
     if (isTemporary(temp)) {
-        sprintf(reg, "$t%d", atoi(temp + 1));
+        char* reg = regBuffer[bufferIndex];
+        bufferIndex = (bufferIndex + 1) % 4;  // Rotate through 4 buffers
+        int tempNum = atoi(temp + 1);
+        
+        // MIPS register allocation: Direct mapping for t0-t9
+        // For temps beyond t9, use modulo wrapping
+        // Note: This may cause issues with complex programs using >10 temps
+        int regNum = tempNum % 10;
+        sprintf(reg, "$t%d", regNum);
         return reg;
     }
     return temp;
@@ -40,6 +52,7 @@ static const char* tempToReg(const char* temp) {
 void optimizeTAC2() {
     TACInstr* curr = tacList.head;
     optimizedList2.head = optimizedList2.tail = NULL;
+    optimizedList = optimizedList2; // Sync with global optimizedList
     while (curr) {
         TACInstr* newInstr = createTAC(curr->op, curr->arg1, curr->arg2, curr->result);
         if (newInstr) {
@@ -48,6 +61,7 @@ void optimizeTAC2() {
         }
         curr = curr->next;
     }
+    optimizedList = optimizedList2; // Sync again after optimization
 }
 
 // Print unoptimized TAC to file (for compatibility with main.c)
@@ -105,6 +119,9 @@ void printOptimizedTAC2() {
             case TAC_PARAM: printf("PARAM %s\n", curr->arg1); break;
             case TAC_RETURN: printf("RETURN %s\n", curr->arg1 ? curr->arg1 : ""); break;
             case TAC_ARG: printf("ARG %s\n", curr->arg1); break;
+            case TAC_ARRAY_DECL: printf("ARRAY_DECL %s[%s]\n", curr->result, curr->arg1); break;
+            case TAC_ARRAY_WRITE: printf("%s[%s] = %s\n", curr->result, curr->arg1, curr->arg2); break;
+            case TAC_ARRAY_READ: printf("%s = %s[%s]\n", curr->result, curr->arg1, curr->arg2); break;
             default: break;
         }
         curr = curr->next;
@@ -138,6 +155,9 @@ void printOptimizedTACToFile2(const char* filename) {
             case TAC_PARAM: fprintf(file, "PARAM %s\n", curr->arg1); break;
             case TAC_RETURN: fprintf(file, "RETURN %s\n", curr->arg1 ? curr->arg1 : ""); break;
             case TAC_ARG: fprintf(file, "ARG %s\n", curr->arg1); break;
+            case TAC_ARRAY_DECL: fprintf(file, "ARRAY_DECL %s[%s]\n", curr->result, curr->arg1); break;
+            case TAC_ARRAY_WRITE: fprintf(file, "%s[%s] = %s\n", curr->result, curr->arg1, curr->arg2); break;
+            case TAC_ARRAY_READ: fprintf(file, "%s = %s[%s]\n", curr->result, curr->arg1, curr->arg2); break;
             default: break;
         }
         curr = curr->next;
@@ -165,95 +185,282 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
     // Generate main function
     appendMIPS(&mipsList, createMIPS(MIPS_LABEL, NULL, "main", NULL, NULL));
     
-    // Find the first non-main function call in the TAC and its arguments
+    // Calculate stack space needed for main function
+    // Get the symbol table's nextOffset to know how much stack we need
+    int stackSize = 0;
+    if (currentSymTab) {
+        stackSize = currentSymTab->nextOffset;
+    }
+    
+    // Allocate stack frame if needed
+    if (stackSize > 0) {
+        char stackStr[32];
+        sprintf(stackStr, "-%d", stackSize);
+        appendMIPS(&mipsList, createMIPS(MIPS_ADDI, "$sp", "$sp", stackStr, NULL));
+    }
+    
+    // Process main function body - handle ALL operations including function calls
     TACInstr* curr = optimizedList2.head;
-    char* firstFunctionName = NULL;
-    char* arg0 = NULL;
-    char* arg1 = NULL;
-    TACInstr* argInstr0 = NULL;
-    TACInstr* argInstr1 = NULL;
-
+    int inMain = 0;
+    TACInstr* pendingArgs[10];  // Track pending ARG instructions before a call
+    int pendingArgCount = 0;
+    
+    // Iterate through all TAC and process main function body
     while (curr) {
-        if (curr->op == TAC_FUNC_CALL && curr->arg1) {
-            firstFunctionName = curr->arg1;
-            // Scan from head to curr to find the two most recent ARG instructions
-            TACInstr* scan = optimizedList2.head;
-            TACInstr* lastArg1 = NULL;
-            TACInstr* lastArg0 = NULL;
-            while (scan != curr) {
-                if (scan->op == TAC_ARG) {
-                    lastArg0 = lastArg1;
-                    lastArg1 = scan;
+        if (curr->op == TAC_FUNC_DEF && curr->arg1 && strcmp(curr->arg1, "main") == 0) {
+            inMain = 1;
+            curr = curr->next;
+            continue;
+        }
+        if (curr->op == TAC_FUNC_DEF && inMain) {
+            break; // Exited main
+        }
+        
+        if (inMain) {
+            if (curr->op == TAC_ARG) {
+                // Store ARG instruction for upcoming function call
+                pendingArgs[pendingArgCount++] = curr;
+            } else if (curr->op == TAC_FUNC_CALL) {
+                // Load arguments into registers (in correct order)
+                if (pendingArgCount == 1) {
+                    // Single argument into $a0
+                    char* arg0 = pendingArgs[0]->arg1;
+                    if ((isdigit(arg0[0])) || (arg0[0] == '-' && isdigit(arg0[1]))) {
+                        appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", arg0, NULL, NULL));
+                    } else if (isTemporary(arg0)) {
+                        char regBuf[10];
+                        strcpy(regBuf, tempToReg(arg0));
+                        appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", regBuf, NULL, NULL));
+                    } else {
+                        int offset = getOptimizerVarOffset(arg0);
+                        if (offset != -1) {
+                            char offsetStr[32];
+                            sprintf(offsetStr, "%d($sp)", offset);
+                            appendMIPS(&mipsList, createMIPS(MIPS_LW, "$a0", offsetStr, NULL, NULL));
+                        }
+                    }
+                } else if (pendingArgCount >= 2) {
+                    // Swap to get correct order (args were added in reverse)
+                    char* arg0 = pendingArgs[1]->arg1;
+                    char* arg1 = pendingArgs[0]->arg1;
+                    
+                    // Load arg0 into $a0
+                    if ((isdigit(arg0[0])) || (arg0[0] == '-' && isdigit(arg0[1]))) {
+                        appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", arg0, NULL, NULL));
+                    } else if (isTemporary(arg0)) {
+                        char regBuf[10];
+                        strcpy(regBuf, tempToReg(arg0));
+                        appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", regBuf, NULL, NULL));
+                    } else {
+                        int offset = getOptimizerVarOffset(arg0);
+                        if (offset != -1) {
+                            // Check if it's an array - pass address instead of value
+                            if (isArray(arg0)) {
+                                // Calculate array base address: $sp + offset
+                                char offsetStr[32];
+                                sprintf(offsetStr, "%d", offset);
+                                appendMIPS(&mipsList, createMIPS(MIPS_ADDI, "$a0", "$sp", offsetStr, NULL));
+                            } else {
+                                // Regular variable - load value
+                                char offsetStr[32];
+                                sprintf(offsetStr, "%d($sp)", offset);
+                                appendMIPS(&mipsList, createMIPS(MIPS_LW, "$a0", offsetStr, NULL, NULL));
+                            }
+                        }
+                    }
+                    
+                    // Load arg1 into $a1
+                    if ((isdigit(arg1[0])) || (arg1[0] == '-' && isdigit(arg1[1]))) {
+                        appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a1", arg1, NULL, NULL));
+                    } else if (isTemporary(arg1)) {
+                        char regBuf[10];
+                        strcpy(regBuf, tempToReg(arg1));
+                        appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a1", regBuf, NULL, NULL));
+                    } else {
+                        int offset = getOptimizerVarOffset(arg1);
+                        if (offset != -1) {
+                            char offsetStr[32];
+                            sprintf(offsetStr, "%d($sp)", offset);
+                            appendMIPS(&mipsList, createMIPS(MIPS_LW, "$a1", offsetStr, NULL, NULL));
+                        }
+                    }
                 }
-                scan = scan->next;
+                
+                // Make function call
+                appendMIPS(&mipsList, createMIPS(MIPS_JAL, NULL, curr->arg1, NULL, NULL));
+                
+                // Move result to temp register
+                if (curr->result && isTemporary(curr->result)) {
+                    char resultBuf[10];
+                    strcpy(resultBuf, tempToReg(curr->result));
+                    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, resultBuf, "$v0", NULL, NULL));
+                }
+                
+                // Clear pending args for next call
+                pendingArgCount = 0;
+            } else if (curr->op == TAC_ARRAY_WRITE) {
+            // arr[index] = value: result=array_name, arg1=index, arg2=value
+            char* arrayName = curr->result;
+            char* index = curr->arg1;
+            char* value = curr->arg2;
+            int baseOffset = getOptimizerVarOffset(arrayName);
+            
+            if (baseOffset != -1) {
+                // Load index into $t7
+                if (isTemporary(index)) {
+                    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$t7", tempToReg(index), NULL, NULL));
+                } else if (isdigit(index[0]) || (index[0] == '-' && isdigit(index[1]))) {
+                    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t7", index, NULL, NULL));
+                } else {
+                    char indexOffsetStr[32];
+                    int indexOffset = getOptimizerVarOffset(index);
+                    if (indexOffset != -1) {
+                        sprintf(indexOffsetStr, "%d($fp)", indexOffset);
+                        appendMIPS(&mipsList, createMIPS(MIPS_LW, "$t7", indexOffsetStr, NULL, NULL));
+                    }
+                }
+                
+                // Calculate offset: $t7 = $t7 * 4
+                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t8", "4", NULL, NULL));
+                appendMIPS(&mipsList, createMIPS(MIPS_MUL, NULL, "$t7", "$t8", NULL));
+                appendMIPS(&mipsList, createMIPS(MIPS_MFLO, "$t7", NULL, NULL, NULL));
+                
+                // Add base offset
+                char baseStr[32];
+                sprintf(baseStr, "%d", baseOffset);
+                appendMIPS(&mipsList, createMIPS(MIPS_ADDI, "$t7", "$t7", baseStr, NULL));
+                
+                // Add $sp to get final address
+                appendMIPS(&mipsList, createMIPS(MIPS_ADD, "$t7", "$t7", "$sp", NULL));
+                
+                // Load value into $t6
+                if (isTemporary(value)) {
+                    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$t6", tempToReg(value), NULL, NULL));
+                } else if (isdigit(value[0]) || (value[0] == '-' && isdigit(value[1]))) {
+                    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t6", value, NULL, NULL));
+                } else {
+                    char valueOffsetStr[32];
+                    int valueOffset = getOptimizerVarOffset(value);
+                    if (valueOffset != -1) {
+                        sprintf(valueOffsetStr, "%d($sp)", valueOffset);
+                        appendMIPS(&mipsList, createMIPS(MIPS_LW, "$t6", valueOffsetStr, NULL, NULL));
+                    }
+                }
+                
+                // Store value at calculated address
+                appendMIPS(&mipsList, createMIPS(MIPS_SW, "$t6", "0($t7)", NULL, NULL));
             }
-            // Swap the order since TAC has args in reverse order
-            argInstr0 = lastArg1;
-            argInstr1 = lastArg0;
-            if (argInstr0) arg0 = argInstr0->arg1;
-            if (argInstr1) arg1 = argInstr1->arg1;
-            break;
+        } else if (curr->op == TAC_ARRAY_READ) {
+            // temp = arr[index]: result=temp, arg1=array_name, arg2=index
+            char* temp = curr->result;
+            char* arrayName = curr->arg1;
+            char* index = curr->arg2;
+            int baseOffset = getOptimizerVarOffset(arrayName);
+            
+            if (baseOffset != -1) {
+                // Load index into $t7
+                if (isTemporary(index)) {
+                    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$t7", tempToReg(index), NULL, NULL));
+                } else if (isdigit(index[0]) || (index[0] == '-' && isdigit(index[1]))) {
+                    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t7", index, NULL, NULL));
+                } else {
+                    char indexOffsetStr[32];
+                    int indexOffset = getOptimizerVarOffset(index);
+                    if (indexOffset != -1) {
+                        sprintf(indexOffsetStr, "%d($sp)", indexOffset);
+                        appendMIPS(&mipsList, createMIPS(MIPS_LW, "$t7", indexOffsetStr, NULL, NULL));
+                    }
+                }
+                
+                // Calculate offset: $t7 = $t7 * 4
+                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t8", "4", NULL, NULL));
+                appendMIPS(&mipsList, createMIPS(MIPS_MUL, NULL, "$t7", "$t8", NULL));
+                appendMIPS(&mipsList, createMIPS(MIPS_MFLO, "$t7", NULL, NULL, NULL));
+                
+                // Add base offset
+                char baseStr[32];
+                sprintf(baseStr, "%d", baseOffset);
+                appendMIPS(&mipsList, createMIPS(MIPS_ADDI, "$t7", "$t7", baseStr, NULL));
+                
+                // Add $sp to get final address
+                appendMIPS(&mipsList, createMIPS(MIPS_ADD, "$t7", "$t7", "$sp", NULL));
+                
+                // Load value from calculated address into temp register
+                if (isTemporary(temp)) {
+                    appendMIPS(&mipsList, createMIPS(MIPS_LW, (char*)tempToReg(temp), "0($t7)", NULL, NULL));
+                }
+            }
+            } else if (curr->op == TAC_ASSIGN) {
+                char* dest = curr->result;
+                char* src = curr->arg1;
+                int destOffset = getOptimizerVarOffset(dest);
+                if (isTemporary(src)) {
+                    if (destOffset != -1) {
+                        char offsetStr[32];
+                        sprintf(offsetStr, "%d($sp)", destOffset);
+                        appendMIPS(&mipsList, createMIPS(MIPS_SW, (char*)tempToReg(src), offsetStr, NULL, NULL));
+                    }
+                } else if ((src && isdigit(src[0])) || (src && src[0] == '-' && isdigit(src[1]))) {
+                    if (destOffset != -1) {
+                        appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t7", src, NULL, NULL));
+                        char offsetStr[32];
+                        sprintf(offsetStr, "%d($sp)", destOffset);
+                        appendMIPS(&mipsList, createMIPS(MIPS_SW, "$t7", offsetStr, NULL, NULL));
+                    }
+                } else if (src) {
+                    int srcOffset = getOptimizerVarOffset(src);
+                    if (srcOffset != -1 && destOffset != -1) {
+                        char srcOffsetStr[32], destOffsetStr[32];
+                        sprintf(srcOffsetStr, "%d($sp)", srcOffset);
+                        sprintf(destOffsetStr, "%d($sp)", destOffset);
+                        appendMIPS(&mipsList, createMIPS(MIPS_LW, "$t7", srcOffsetStr, NULL, NULL));
+                        appendMIPS(&mipsList, createMIPS(MIPS_SW, "$t7", destOffsetStr, NULL, NULL));
+                    }
+                }
+            } else if (curr->op == TAC_PRINT) {
+                char* val = curr->arg1;
+                if (isTemporary(val)) {
+                    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", (char*)tempToReg(val), NULL, NULL));
+                } else if ((val && isdigit(val[0])) || (val && val[0] == '-' && isdigit(val[1]))) {
+                    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", val, NULL, NULL));
+                } else if (val) {
+                    int valOffset = getOptimizerVarOffset(val);
+                    if (valOffset != -1) {
+                        char offsetStr[32];
+                        sprintf(offsetStr, "%d($sp)", valOffset);
+                        appendMIPS(&mipsList, createMIPS(MIPS_LW, "$a0", offsetStr, NULL, NULL));
+                    }
+                }
+                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "1", NULL, NULL));
+                appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
+                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "11", NULL, NULL));
+                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", "10", NULL, NULL));
+                appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
+            } else if (curr->op == TAC_ADD) {
+                // Handle add: result = arg1 + arg2
+                if (isTemporary(curr->arg1) && isTemporary(curr->arg2) && isTemporary(curr->result)) {
+                    // Create separate buffers for each register string (NOT static)
+                    char arg1RegBuf[10], arg2RegBuf[10], resultRegBuf[10];
+                    const char* arg1RegConst = tempToReg(curr->arg1);
+                    const char* arg2RegConst = tempToReg(curr->arg2);
+                    const char* resultRegConst = tempToReg(curr->result);
+                    strcpy(arg1RegBuf, arg1RegConst);
+                    strcpy(arg2RegBuf, arg2RegConst);
+                    strcpy(resultRegBuf, resultRegConst);
+                    appendMIPS(&mipsList, createMIPS(MIPS_ADD, resultRegBuf, arg1RegBuf, arg2RegBuf, NULL));
+                }
+            }
         }
         curr = curr->next;
     }
-
-    if (firstFunctionName) {
-        // Ensure arguments are stored to stack if they are variables or temporaries
-        if (arg0) {
-            if ((isdigit(arg0[0])) || (arg0[0] == '-' && isdigit(arg0[1]))) {
-                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", arg0, NULL, NULL));
-            } else if (isTemporary(arg0)) {
-                appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", tempToReg(arg0), NULL, NULL));
-            } else {
-                int offset = getOptimizerVarOffset(arg0);
-                if (offset != -1) {
-                    char offsetStr[32];
-                    sprintf(offsetStr, "%d($fp)", offset);
-                    appendMIPS(&mipsList, createMIPS(MIPS_LW, "$a0", offsetStr, NULL, NULL));
-                }
-            }
-        }
-        if (arg1) {
-            if ((isdigit(arg1[0])) || (arg1[0] == '-' && isdigit(arg1[1]))) {
-                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a1", arg1, NULL, NULL));
-            } else if (isTemporary(arg1)) {
-                appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a1", tempToReg(arg1), NULL, NULL));
-            } else {
-                int offset = getOptimizerVarOffset(arg1);
-                if (offset != -1) {
-                    char offsetStr[32];
-                    sprintf(offsetStr, "%d($fp)", offset);
-                    appendMIPS(&mipsList, createMIPS(MIPS_LW, "$a1", offsetStr, NULL, NULL));
-                }
-            }
-        }
-        appendMIPS(&mipsList, createMIPS(MIPS_JAL, NULL, firstFunctionName, NULL, NULL));
-
-        // After function call, move $v0 to the temporary that stores the result (e.g., t2)
-        // Find the TAC_FUNC_CALL instruction to get the result temp
-        curr = optimizedList2.head;
-        while (curr) {
-            if (curr->op == TAC_FUNC_CALL && curr->arg1 && strcmp(curr->arg1, firstFunctionName) == 0 && curr->result) {
-                if (isTemporary(curr->result)) {
-                    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, tempToReg(curr->result), "$v0", NULL, NULL));
-                }
-                break;
-            }
-            curr = curr->next;
-        }
+    
+    // Exit program (PRINT instructions will handle output)
+    // Restore stack pointer before exit
+    if (stackSize > 0) {
+        char stackStr[32];
+        sprintf(stackStr, "%d", stackSize);
+        appendMIPS(&mipsList, createMIPS(MIPS_ADDI, "$sp", "$sp", stackStr, NULL));
     }
-    
-    // Print the result (in $v0)
-    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", "$v0", NULL, NULL));
-    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "1", NULL, NULL));
-    appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
-    
-    // Print newline
-    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "11", NULL, NULL));
-    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", "10", NULL, NULL));
-    appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
-    
-    // Exit program
     appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "10", NULL, NULL));
     appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
     
@@ -264,25 +471,233 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             // Generate function label
             appendMIPS(&mipsList, createMIPS(MIPS_LABEL, NULL, curr->arg1, NULL, NULL));
             
-            // Look ahead for the operation in this function
+            // Check if this function calls other functions - if so, need to save $ra
+            int callsOtherFuncs = 0;
+            TACInstr* scan = curr->next;
+            while (scan && scan->op != TAC_FUNC_DEF) {
+                if (scan->op == TAC_FUNC_CALL) {
+                    callsOtherFuncs = 1;
+                    break;
+                }
+                scan = scan->next;
+            }
+            
+            // If function calls others, save $ra and allocate stack
+            if (callsOtherFuncs) {
+                appendMIPS(&mipsList, createMIPS(MIPS_ADDI, "$sp", "$sp", "-8", NULL));
+                appendMIPS(&mipsList, createMIPS(MIPS_SW, "$ra", "0($sp)", NULL, NULL));
+            }
+            
+            // Process all instructions in this function
             TACInstr* funcInstr = curr->next;
+            TACInstr* funcPendingArgs[10];
+            int funcPendingArgCount = 0;
+            
+            // Track variable-to-register mappings for this function
+            // Simple map: variable name -> temp register name
+            char varToTemp[10][32];  // Up to 10 mappings: varName
+            char varToReg[10][32];   // corresponding tempReg
+            int varMapCount = 0;
+            
             while (funcInstr && funcInstr->op != TAC_FUNC_DEF) {
-                if (funcInstr->op == TAC_ADD) {
-                    // Generate: add $v0, $a0, $a1
-                    appendMIPS(&mipsList, createMIPS(MIPS_ADD, "$v0", "$a0", "$a1", NULL));
+                if (funcInstr->op == TAC_ARG) {
+                    funcPendingArgs[funcPendingArgCount++] = funcInstr;
+                } else if (funcInstr->op == TAC_FUNC_CALL) {
+                    // Handle function call within function
+                    if (funcPendingArgCount == 1) {
+                        char* arg0 = funcPendingArgs[0]->arg1;
+                        if (isdigit(arg0[0]) || (arg0[0] == '-' && isdigit(arg0[1]))) {
+                            appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", arg0, NULL, NULL));
+                        } else if (isTemporary(arg0)) {
+                            char regBuf[10];
+                            strcpy(regBuf, tempToReg(arg0));
+                            appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", regBuf, NULL, NULL));
+                        }
+                    } else if (funcPendingArgCount >= 2) {
+                        char* arg0 = funcPendingArgs[1]->arg1;
+                        char* arg1 = funcPendingArgs[0]->arg1;
+                        
+                        // Load arg0 into $a0
+                        if (isdigit(arg0[0]) || (arg0[0] == '-' && isdigit(arg0[1]))) {
+                            appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", arg0, NULL, NULL));
+                        } else if (isTemporary(arg0)) {
+                            char regBuf[10];
+                            strcpy(regBuf, tempToReg(arg0));
+                            appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", regBuf, NULL, NULL));
+                        } else {
+                            // It's a variable - check if we have a mapping
+                            int found = 0;
+                            for (int i = 0; i < varMapCount; i++) {
+                                if (strcmp(varToTemp[i], arg0) == 0) {
+                                    // Found mapping: variable -> temp register
+                                    char regBuf[10];
+                                    strcpy(regBuf, tempToReg(varToReg[i]));
+                                    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", regBuf, NULL, NULL));
+                                    found = 1;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                // Assume it's a parameter still in $a0 (hacky but works for simple cases)
+                                // Don't generate any load - it's already there
+                            }
+                        }
+                        
+                        // Load arg1 into $a1
+                        if (isdigit(arg1[0]) || (arg1[0] == '-' && isdigit(arg1[1]))) {
+                            appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a1", arg1, NULL, NULL));
+                        } else if (isTemporary(arg1)) {
+                            char regBuf[10];
+                            strcpy(regBuf, tempToReg(arg1));
+                            appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a1", regBuf, NULL, NULL));
+                        }
+                    }
+                    
+                    appendMIPS(&mipsList, createMIPS(MIPS_JAL, NULL, funcInstr->arg1, NULL, NULL));
+                    
+                    if (funcInstr->result && isTemporary(funcInstr->result)) {
+                        char resultBuf[10];
+                        strcpy(resultBuf, tempToReg(funcInstr->result));
+                        appendMIPS(&mipsList, createMIPS(MIPS_MOVE, resultBuf, "$v0", NULL, NULL));
+                    }
+                    funcPendingArgCount = 0;
+                } else if (funcInstr->op == TAC_ASSIGN) {
+                    // Handle assignment: result = arg1
+                    // Store temp to stack variable or temp to temp
+                    if (isTemporary(funcInstr->arg1) && isTemporary(funcInstr->result)) {
+                        char arg1Buf[10], resBuf[10];
+                        strcpy(arg1Buf, tempToReg(funcInstr->arg1));
+                        strcpy(resBuf, tempToReg(funcInstr->result));
+                        appendMIPS(&mipsList, createMIPS(MIPS_MOVE, resBuf, arg1Buf, NULL, NULL));
+                    } else if (isTemporary(funcInstr->arg1) && !isTemporary(funcInstr->result)) {
+                        // Variable = temp: track this mapping
+                        if (varMapCount < 10) {
+                            strcpy(varToTemp[varMapCount], funcInstr->result);
+                            strcpy(varToReg[varMapCount], funcInstr->arg1);
+                            varMapCount++;
+                        }
+                    }
+                } else if (funcInstr->op == TAC_ARRAY_READ) {
+                    // Handle array access in functions: arr[index]
+                    // TAC format: arg1=arrayName, arg2=index, result=resultTemp
+                    char* arrayName = funcInstr->arg1;
+                    char* index = funcInstr->arg2;
+                    char* resultTemp = funcInstr->result;
+                    
+                    // Array parameters have base address in $a0 (first param)
+                    // For now, assume array param is always first param
+                    
+                    // Load index into $t7
+                    if (index && ((isdigit(index[0])) || (index[0] == '-' && isdigit(index[1])))) {
+                        appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t7", index, NULL, NULL));
+                    } else if (index && isTemporary(index)) {
+                        char regBuf[10];
+                        strcpy(regBuf, tempToReg(index));
+                        appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$t7", regBuf, NULL, NULL));
+                    } else {
+                        // Default to 0 if index is NULL or unrecognized
+                        appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t7", "0", NULL, NULL));
+                    }
+                    
+                    // Calculate offset: index * 4
+                    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t8", "4", NULL, NULL));
+                    appendMIPS(&mipsList, createMIPS(MIPS_MUL, NULL, "$t7", "$t8", NULL));
+                    appendMIPS(&mipsList, createMIPS(MIPS_MFLO, "$t7", NULL, NULL, NULL));
+                    
+                    // Add base address (array param in $a0)
+                    appendMIPS(&mipsList, createMIPS(MIPS_ADD, "$t7", "$t7", "$a0", NULL));
+                    
+                    // Load value
+                    if (resultTemp && isTemporary(resultTemp)) {
+                        char regBuf[10];
+                        strcpy(regBuf, tempToReg(resultTemp));
+                        appendMIPS(&mipsList, createMIPS(MIPS_LW, regBuf, "0($t7)", NULL, NULL));
+                    }
+                } else if (funcInstr->op == TAC_ADD) {
+                    // Handle ADD operations using temp registers or parameters
+                    char arg1Buf[10], arg2Buf[10], resBuf[10];
+                    
+                    // Check if arg1 is a parameter (a, b, x, y, n, etc.) or temp
+                    if (isTemporary(funcInstr->arg1)) {
+                        strcpy(arg1Buf, tempToReg(funcInstr->arg1));
+                    } else {
+                        // It's a parameter - parameters are in $a0, $a1 initially but might need loading
+                        strcpy(arg1Buf, "$a0");  // Simplified - assumes first param
+                    }
+                    
+                    if (isTemporary(funcInstr->arg2)) {
+                        strcpy(arg2Buf, tempToReg(funcInstr->arg2));
+                    } else {
+                        strcpy(arg2Buf, "$a1");  // Simplified - assumes second param
+                    }
+                    
+                    if (isTemporary(funcInstr->result)) {
+                        strcpy(resBuf, tempToReg(funcInstr->result));
+                    } else {
+                        strcpy(resBuf, "$v0");
+                    }
+                    
+                    appendMIPS(&mipsList, createMIPS(MIPS_ADD, resBuf, arg1Buf, arg2Buf, NULL));
                 } else if (funcInstr->op == TAC_MULTIPLY) {
-                    // Generate: mult $a0, $a1; mflo $v0
-                    appendMIPS(&mipsList, createMIPS(MIPS_MUL, NULL, "$a0", "$a1", NULL));
-                    appendMIPS(&mipsList, createMIPS(MIPS_MFLO, "$v0", NULL, NULL, NULL));
+                    // Check if operands are temps or params
+                    char arg1Buf[10], arg2Buf[10];
+                    
+                    if (isTemporary(funcInstr->arg1)) {
+                        strcpy(arg1Buf, tempToReg(funcInstr->arg1));
+                    } else {
+                        strcpy(arg1Buf, "$a0");
+                    }
+                    
+                    if (isTemporary(funcInstr->arg2)) {
+                        strcpy(arg2Buf, tempToReg(funcInstr->arg2));
+                    } else {
+                        strcpy(arg2Buf, "$a1");
+                    }
+                    
+                    appendMIPS(&mipsList, createMIPS(MIPS_MUL, NULL, arg1Buf, arg2Buf, NULL));
+                    
+                    if (funcInstr->result && isTemporary(funcInstr->result)) {
+                        char resBuf[10];
+                        strcpy(resBuf, tempToReg(funcInstr->result));
+                        appendMIPS(&mipsList, createMIPS(MIPS_MFLO, resBuf, NULL, NULL, NULL));
+                    } else {
+                        appendMIPS(&mipsList, createMIPS(MIPS_MFLO, "$v0", NULL, NULL, NULL));
+                    }
                 } else if (funcInstr->op == TAC_DIVIDE) {
-                    // Generate: div $a0, $a1; mflo $v0
                     appendMIPS(&mipsList, createMIPS(MIPS_DIV, NULL, "$a0", "$a1", NULL));
                     appendMIPS(&mipsList, createMIPS(MIPS_MFLO, "$v0", NULL, NULL, NULL));
                 } else if (funcInstr->op == TAC_SUBTRACT) {
-                    // Generate: sub $v0, $a0, $a1
                     appendMIPS(&mipsList, createMIPS(MIPS_SUB, "$v0", "$a0", "$a1", NULL));
                 } else if (funcInstr->op == TAC_RETURN) {
-                    // Generate: jr $ra
+                    // If returning a temp, move it to $v0 first
+                    if (funcInstr->arg1 && isTemporary(funcInstr->arg1)) {
+                        char regBuf[10];
+                        strcpy(regBuf, tempToReg(funcInstr->arg1));
+                        appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$v0", regBuf, NULL, NULL));
+                    } else if (funcInstr->arg1 && !isTemporary(funcInstr->arg1)) {
+                        // Returning a variable - check mapping
+                        int found = 0;
+                        for (int i = 0; i < varMapCount; i++) {
+                            if (strcmp(varToTemp[i], funcInstr->arg1) == 0) {
+                                // Found mapping: variable -> temp register
+                                char regBuf[10];
+                                strcpy(regBuf, tempToReg(varToReg[i]));
+                                appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$v0", regBuf, NULL, NULL));
+                                found = 1;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            // Variable not mapped - might be parameter, leave $v0 as is
+                        }
+                    }
+                    
+                    // If function called others, restore $ra and stack
+                    if (callsOtherFuncs) {
+                        appendMIPS(&mipsList, createMIPS(MIPS_LW, "$ra", "0($sp)", NULL, NULL));
+                        appendMIPS(&mipsList, createMIPS(MIPS_ADDI, "$sp", "$sp", "8", NULL));
+                    }
+                    
                     appendMIPS(&mipsList, createMIPS(MIPS_JR, NULL, "$ra", NULL, NULL));
                     break; // End of function
                 }

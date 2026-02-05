@@ -16,7 +16,10 @@ typedef enum {
     NODE_VAR,       /* Variable reference (e.g., x) */
     NODE_BINOP,     /* Binary operation (e.g., x + y) */
     NODE_DECL,      /* Variable declaration (e.g., int x) */
+    NODE_ARRAY_DECL, /* Array declaration (e.g., int arr[10]) */
+    NODE_ARRAY_ACCESS, /* Array access (e.g., arr[5]) */
     NODE_ASSIGN,    /* Assignment statement (e.g., x = 10) */
+    NODE_ARRAY_ASSIGN, /* Array assignment (e.g., arr[i] = 10) */
     NODE_PRINT,     /* Print statement (e.g., print(x)) */
     NODE_RETURN,    /* Return statement (e.g., return x) */
     NODE_FUNC,      /* Function definition (e.g., int f() {}) */
@@ -50,7 +53,26 @@ typedef struct ASTNode {
             char* name;              /* Variable name */
             VarType type;            /* Variable type (for declarations) */
         } var;
-        /* int value; */ /* For potential future use in declarations with assignment */
+        
+        /* Array declaration (NODE_ARRAY_DECL) */
+        struct {
+            char* name;              /* Array name */
+            VarType type;            /* Element type */
+            int size;                /* Array size */
+        } array_decl;
+        
+        /* Array access (NODE_ARRAY_ACCESS) */
+        struct {
+            char* name;              /* Array name */
+            struct ASTNode* index;   /* Index expression */
+        } array_access;
+        
+        /* Array assignment (NODE_ARRAY_ASSIGN) */
+        struct {
+            char* name;              /* Array name */
+            struct ASTNode* index;   /* Index expression */
+            struct ASTNode* value;   /* Value to assign */
+        } array_assign;
 
         
         /* Binary operation structure (NODE_BINOP) */
@@ -93,6 +115,7 @@ typedef struct ASTNode {
         struct {
             char* name;                  /* Parameter name */
             VarType type;                /* Parameter type */
+            int is_array;                /* 1 if array parameter */
         } param;
         
         /* Parameter list (NODE_PARAM_LIST) */
@@ -149,11 +172,15 @@ ASTNode* createFlt(double value);                                   /* Create fl
 ASTNode* createVar(char* name);                                  /* Create variable node */
 ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right);   /* Create binary op node */
 ASTNode* createDecl(char* name, VarType type);                              /* Create declaration node */
+ASTNode* createArrayDecl(char* name, VarType type, int size);   /* Create array declaration node */
+ASTNode* createArrayAccess(char* name, ASTNode* index);         /* Create array access node */
+ASTNode* createArrayAssign(char* name, ASTNode* index, ASTNode* value); /* Create array assignment node */
 ASTNode* createAssign(char* var, ASTNode* value);               /* Create assignment node */
 ASTNode* createPrint(ASTNode* expr);                            /* Create print node */
 ASTNode* createReturn(ASTNode* expr);                           /* Create return node */
 ASTNode* createFunc(char* name, VarType return_type, ASTNode* params, ASTNode* body);  /* Create function node */
 ASTNode* createParam(char* name, VarType type);                  /* Create parameter node */
+ASTNode* createArrayParam(char* name, VarType type);             /* Create array parameter node */
 ASTNode* createParamList(ASTNode* param, ASTNode* next);         /* Create parameter list */
 ASTNode* createFuncCall(char* name, ASTNode* args);              /* Create function call node */
 ASTNode* createArgList(ASTNode* arg, ASTNode* next);             /* Create argument list */
