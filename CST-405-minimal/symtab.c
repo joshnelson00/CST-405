@@ -48,12 +48,49 @@ int addVar(char* name, VarType type) {
     Symbol* entry = &currentSymTab->vars[currentSymTab->count];
     entry->name = strdup(name);
     entry->type = type;
+    entry->is_array = 0;
+    entry->array_size = 0;
     entry->offset = currentSymTab->nextOffset;
     currentSymTab->nextOffset += 4; // assume 4 bytes per variable
     currentSymTab->count++;
 
     printf("SYMBOL TABLE: Added '%s' (%s) at offset %d\n", 
            name,
+           type == TYPE_FLOAT ? "float" : type == TYPE_VOID ? "void" : "int",
+           entry->offset);
+
+    return entry->offset;
+}
+
+/* Add array to current symbol table */
+int addArray(char* name, VarType type, int size) {
+    if (!currentSymTab) {
+        fprintf(stderr, "❌ Error: No active symbol table\n");
+        return -1;
+    }
+
+    if (isVarDeclared(name)) {
+        fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Variable '%s' already declared\n", name);
+        return -1;
+    }
+
+    if (currentSymTab->count >= MAX_VARS) {
+        fprintf(stderr, "❌ Error: Symbol table full (max %d variables)\n", MAX_VARS);
+        return -1;
+    }
+
+    Symbol* entry = &currentSymTab->vars[currentSymTab->count];
+    entry->name = strdup(name);
+    entry->type = type;
+    entry->is_array = 1;
+    entry->array_size = size;
+    entry->offset = currentSymTab->nextOffset;
+    currentSymTab->nextOffset += 4 * size; // allocate space for array
+    currentSymTab->count++;
+
+    printf("SYMBOL TABLE: Added array '%s[%d]' (%s) at offset %d\n", 
+           name, size,
            type == TYPE_FLOAT ? "float" : type == TYPE_VOID ? "void" : "int",
            entry->offset);
 
@@ -145,6 +182,28 @@ VarType getVarType(char* name) {
 /* Check if variable declared (returns true/false only) */
 int isVarDeclared(char* name) {
     return getVarOffset(name) != -1;
+}
+
+/* Check if variable is an array */
+int isArray(char* name) {
+    if (!currentSymTab) return 0;
+
+    for (int i = 0; i < currentSymTab->count; i++) {
+        if (strcmp(currentSymTab->vars[i].name, name) == 0) 
+            return currentSymTab->vars[i].is_array;
+    }
+    return 0;
+}
+
+/* Get size of array */
+int getArraySize(char* name) {
+    if (!currentSymTab) return 0;
+
+    for (int i = 0; i < currentSymTab->count; i++) {
+        if (strcmp(currentSymTab->vars[i].name, name) == 0) 
+            return currentSymTab->vars[i].array_size;
+    }
+    return 0;
 }
 
 /* Check if function declared */

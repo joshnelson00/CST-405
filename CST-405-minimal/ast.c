@@ -70,6 +70,35 @@ ASTNode* createAssign(char* var, ASTNode* value) {
     return node;
 }
 
+/* Create an array declaration node */
+ASTNode* createArrayDecl(char* name, VarType type, int size) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_ARRAY_DECL;
+    node->data.array_decl.name = strdup(name);
+    node->data.array_decl.type = type;
+    node->data.array_decl.size = size;
+    return node;
+}
+
+/* Create an array access node */
+ASTNode* createArrayAccess(char* name, ASTNode* index) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_ARRAY_ACCESS;
+    node->data.array_access.name = strdup(name);
+    node->data.array_access.index = index;
+    return node;
+}
+
+/* Create an array assignment node */
+ASTNode* createArrayAssign(char* name, ASTNode* index, ASTNode* value) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_ARRAY_ASSIGN;
+    node->data.array_assign.name = strdup(name);
+    node->data.array_assign.index = index;
+    node->data.array_assign.value = value;
+    return node;
+}
+
 /* Create a print statement node */
 ASTNode* createPrint(ASTNode* expr) {
     ASTNode* node = malloc(sizeof(ASTNode));
@@ -114,6 +143,22 @@ void printAST(ASTNode* node, int level) {
         case NODE_DECL:
             printf("DECL %s (%s)\n", node->data.var.name,
                    node->data.var.type == TYPE_FLOAT ? "float" : "int");
+            break;
+        case NODE_ARRAY_DECL:
+            printf("ARRAY_DECL %s[%d] (%s)\n", node->data.array_decl.name,
+                   node->data.array_decl.size,
+                   node->data.array_decl.type == TYPE_FLOAT ? "float" : "int");
+            break;
+        case NODE_ARRAY_ACCESS:
+            printf("ARRAY_ACCESS %s[", node->data.array_access.name);
+            printAST(node->data.array_access.index, level + 1);
+            printf("]\n");
+            break;
+        case NODE_ARRAY_ASSIGN:
+            printf("ARRAY_ASSIGN %s[", node->data.array_assign.name);
+            printAST(node->data.array_assign.index, level + 1);
+            printf("] = ");
+            printAST(node->data.array_assign.value, level + 1);
             break;
         case NODE_ASSIGN:
             printf("ASSIGN: %s = ", node->data.assign.var);
@@ -221,6 +266,17 @@ ASTNode* createParam(char* name, VarType type) {
     node->type = NODE_PARAM;
     node->data.param.name = strdup(name);
     node->data.param.type = type;
+    node->data.param.is_array = 0;
+    return node;
+}
+
+/* Create an array parameter node */
+ASTNode* createArrayParam(char* name, VarType type) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_PARAM;
+    node->data.param.name = strdup(name);
+    node->data.param.type = type;
+    node->data.param.is_array = 1;
     return node;
 }
 

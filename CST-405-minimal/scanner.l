@@ -51,6 +51,8 @@ int yycolumn = 1;
 ")"             { yycolumn++; return ')'; }
 "{"             { yycolumn++; return '{'; }
 "}"             { yycolumn++; return '}'; }
+"["             { yycolumn++; return '['; }
+"]"             { yycolumn++; return ']'; }
 [ \t]+          { yycolumn += yyleng; }  /* Track spaces/tabs only */
 \n              { yyline++; yycolumn = 1; }  /* New line resets column */
 .               { 
