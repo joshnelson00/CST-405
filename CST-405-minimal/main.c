@@ -8,7 +8,7 @@
 #include "ast.h"
 #include "symtab.h"
 #include "codegen.h"
-#include "optimizer.h"
+#include "optimizer2.h"
 #include "tac.h"
 
 // External declarations for TAC lists
@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
         initTAC();
         generateTAC(root);
         printTAC();
-        printTACToFile("tac.txt");
+        printTACToFile2("tac.txt");
         printf("\n");
         
         /* PHASE 4: Optimization */
@@ -90,9 +90,9 @@ int main(int argc, char* argv[]) {
         printf("│ • Constant folding (evaluate compile-time expressions)   │\n");
         printf("│ • Copy propagation (replace variables with values)       │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
-        optimizeTAC();
-        printOptimizedTAC();
-        printOptimizedTACToFile("tac-optimized.txt");
+        optimizeTAC2();
+        printOptimizedTAC2();
+        printOptimizedTACToFile2("tac-optimized.txt");
         printf("\n");
         
         /* PHASE 5: Code Generation */
@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
         printf("│ • Using $t0-$t7 for temporary values                     │\n");
         printf("│ • System calls for print operations                      │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
-        generateMIPSFromOptimizedTAC(argv[2]);
+        generateMIPSFromOptimizedTAC2(argv[2]);
         printf("✓ MIPS assembly code generated to: %s\n", argv[2]);
         printf("\n");
         

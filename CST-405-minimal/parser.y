@@ -258,7 +258,7 @@ arg_list:
         $$ = createArgList($1, NULL);  /* Single argument */
     }
     | arg_list ',' expr { 
-        $$ = createArgList($1, $3);  /* Multiple arguments */
+        $$ = createArgList($3, $1);  /* Multiple arguments - new arg with link to previous list */
     }
     ;
 
