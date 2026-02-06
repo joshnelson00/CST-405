@@ -63,8 +63,11 @@ program:
 
 /* FUNCTION LIST RULES */
 func_list:
-    func { $$ = createFuncList($1, NULL); }
-  | func_list func { $$ = createFuncList($1, $2); }
+    func { $$ = $1; }
+  | func func_list { 
+        $1->data.func.next = $2;
+        $$ = $1;
+    }
 
 /* FUNCTION RULES */
 func:
@@ -98,6 +101,30 @@ func:
         addFunction($2, TYPE_VOID, $$);            /* Add to global symbol table */
         free($2);
     }
+    | INT '[' ']' ID '(' param_list ')' '{' stmt_list '}' { 
+        $$ = createFunc($4, TYPE_INT, $6, $9);  /* Function returning int array with parameters */
+        $$->data.func.return_type = TYPE_INT;
+        addFunction($4, TYPE_INT, $$);
+        free($4);
+    }
+    | INT '[' ']' ID '(' ')' '{' stmt_list '}' { 
+        $$ = createFunc($4, TYPE_INT, NULL, $8);  /* Function returning int array, no parameters */
+        $$->data.func.return_type = TYPE_INT;
+        addFunction($4, TYPE_INT, $$);
+        free($4);
+    }
+    | FLOAT '[' ']' ID '(' param_list ')' '{' stmt_list '}' { 
+        $$ = createFunc($4, TYPE_FLOAT, $6, $9);  /* Function returning float array with parameters */
+        $$->data.func.return_type = TYPE_FLOAT;
+        addFunction($4, TYPE_FLOAT, $$);
+        free($4);
+    }
+    | FLOAT '[' ']' ID '(' ')' '{' stmt_list '}' { 
+        $$ = createFunc($4, TYPE_FLOAT, NULL, $8);  /* Function returning float array, no parameters */
+        $$->data.func.return_type = TYPE_FLOAT;
+        addFunction($4, TYPE_FLOAT, $$);
+        free($4);
+    }
     | error '}' { yyerrok; }
     ;
 
@@ -119,6 +146,14 @@ param:
     }
     | FLOAT ID { 
         $$ = createParam($2, TYPE_FLOAT);  /* Float parameter */
+        free($2);
+    }
+    | INT ID '[' ']' {
+        $$ = createArrayParam($2, TYPE_INT);  /* Integer array parameter */
+        free($2);
+    }
+    | FLOAT ID '[' ']' {
+        $$ = createArrayParam($2, TYPE_FLOAT);  /* Float array parameter */
         free($2);
     }
     ;

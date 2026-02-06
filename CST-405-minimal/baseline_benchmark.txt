@@ -1,0 +1,28 @@
+=== Phase 0: Initialization Performance ===
+CPU Time: 0.000038 seconds
+Wall Time: 0.000038 seconds
+Memory Delta: 4.00 KB
+=== Phase 1: Lexical & Syntax Analysis Performance ===
+CPU Time: 0.000159 seconds
+Wall Time: 0.000159 seconds
+Memory Delta: 32.00 KB
+=== Phase 2: AST Display Performance ===
+CPU Time: 0.000051 seconds
+Wall Time: 0.000051 seconds
+Memory Delta: 0.00 KB
+=== Phase 3: TAC Generation Performance ===
+CPU Time: 0.000221 seconds
+Wall Time: 0.000221 seconds
+Memory Delta: 12.00 KB
+=== Phase 4: Optimization Performance ===
+CPU Time: 0.000140 seconds
+Wall Time: 0.000141 seconds
+Memory Delta: 8.00 KB
+=== Phase 5: MIPS Code Generation Performance ===
+CPU Time: 0.000159 seconds
+Wall Time: 0.000159 seconds
+Memory Delta: 16.00 KB
+=== TOTAL COMPILATION TIME Performance ===
+CPU Time: 0.001088 seconds
+Wall Time: 0.001104 seconds
+Memory Delta: 392.00 KB

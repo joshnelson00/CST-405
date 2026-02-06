@@ -102,7 +102,7 @@ char* generateTACExpr(ASTNode* node) {
         case NODE_ARRAY_ACCESS: {
             char* index = generateTACExpr(node->data.array_access.index);
             char* temp = newTemp();
-            appendTAC(createTAC(TAC_ARRAY_ACCESS, node->data.array_access.name, index, temp));
+            appendTAC(createTAC(TAC_ARRAY_READ, node->data.array_access.name, index, temp));
             return temp;
         }
         default:
@@ -179,7 +179,7 @@ void generateTAC(ASTNode* node) {
         case NODE_ARRAY_ASSIGN: {
             char* index = generateTACExpr(node->data.array_assign.index);
             char* value = generateTACExpr(node->data.array_assign.value);
-            appendTAC(createTAC(TAC_ARRAY_ASSIGN, node->data.array_assign.name, index, value));
+            appendTAC(createTAC(TAC_ARRAY_WRITE, node->data.array_assign.name, index, value));
             break;
         }
         default:
@@ -257,11 +257,11 @@ void printTACToFile(const char* filename) {
             case TAC_ARRAY_DECL:
                 fprintf(file, " %d: ARRAY_DECL %s     // Array declaration\n", instrNum++, curr->arg1);
                 break;
-            case TAC_ARRAY_ASSIGN:
-                fprintf(file, " %d: ARRAY_ASSIGN %s[%s] = %s      // Array assignment\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+            case TAC_ARRAY_WRITE:
+                fprintf(file, " %d: ARRAY_WRITE %s[%s] = %s      // Array assignment\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
-            case TAC_ARRAY_ACCESS:
-                fprintf(file, " %d: ARRAY_ACCESS %s[%s] -> %s    // Array access\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+            case TAC_ARRAY_READ:
+                fprintf(file, " %d: ARRAY_READ %s[%s] -> %s    // Array access\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
             default:
                 break;
@@ -299,11 +299,11 @@ void printTAC() {
             case TAC_ARRAY_DECL:
                 printf("ARRAY_DECL %s\n", curr->arg1);
                 break;
-            case TAC_ARRAY_ASSIGN:
-                printf("ARRAY_ASSIGN %s[%s] = %s\n", curr->arg1, curr->arg2, curr->result);
+            case TAC_ARRAY_WRITE:
+                printf("ARRAY_WRITE %s[%s] = %s\n", curr->arg1, curr->arg2, curr->result);
                 break;
-            case TAC_ARRAY_ACCESS:
-                printf("ARRAY_ACCESS %s[%s] -> %s\n", curr->arg1, curr->arg2, curr->result);
+            case TAC_ARRAY_READ:
+                printf("ARRAY_READ %s[%s] -> %s\n", curr->arg1, curr->arg2, curr->result);
                 break;
             default: break;
         }

@@ -1,6 +1,6 @@
 void printTACToFile2(const char* filename);
-#ifndef OPTIMIZER2_H
-#define OPTIMIZER2_H
+#ifndef OPTIMIZER_H
+#define OPTIMIZER_H
 
 #include "tac.h"
 

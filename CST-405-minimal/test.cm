@@ -1,17 +1,51 @@
-int adding(int x, int y) {
+int addNums(int a, int b) {
     int result;
-    result = x + y;
+    result = a + b;
     return result;
 }
 
-float multiply(float a, float b) {
-    return a * b;
+int multNums(int x, int y) {
+    int product;
+    product = x * y;
+    return product;
+}
+
+int computeVal(int n) {
+    int temp1;
+    int answer;
+    temp1 = addNums(n, 8);
+    answer = multNums(temp1, 3);
+    return answer;
+}
+
+int sumArrayTwo(int arr[], int sz) {
+    int sum;
+    sum = arr[0] + arr[1];
+    return sum;
 }
 
 void main() {
     int nums[3];
-    nums[0] = 5;
-    nums[1] = 3; 
-    nums[2] = adding(nums[0], nums[1]);
-    print(nums[2]);
+    
+    nums[0] = 100;
+    nums[1] = 50;
+    
+    print(nums[0]);
+    print(nums[1]);
+    
+    int val1;
+    val1 = addNums(15, 35);
+    print(val1);
+    
+    int val2;
+    val2 = multNums(7, 8);
+    print(val2);
+    
+    int val3;
+    val3 = computeVal(10);
+    print(val3);
+    
+    int val4;
+    val4 = sumArrayTwo(nums, 2);
+    print(val4);
 }

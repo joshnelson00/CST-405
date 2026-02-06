@@ -8,8 +8,9 @@
 #include "ast.h"
 #include "symtab.h"
 #include "codegen.h"
-#include "optimizer2.h"
+#include "optimizer.h"
 #include "tac.h"
+#include "benchmark.h"
 
 // External declarations for TAC lists
 extern TACList tacList;
@@ -38,13 +39,19 @@ int main(int argc, char* argv[]) {
     printf("╚════════════════════════════════════════════════════════════╝\n");
     printf("\n");
     
+    // Start total compilation timer
+    BenchmarkResult* bench_total = start_benchmark();
+    
     /* PHASE 0: Various Initializations */
     printf("┌──────────────────────────────────────────────────────────┐\n");
     printf("│ PHASE 0: VARIOUS INITIALIZATIONS                         │\n");
     printf("└──────────────────────────────────────────────────────────┘\n");
 
+    BenchmarkResult* bench_init = start_benchmark();
     initGlobalSymTab();  /* Initialize global symbol table */
     initSymTab();        /* Initialize symbol table */
+    end_benchmark(bench_init, "Phase 0: Initialization");
+    free(bench_init);
 
     /* PHASE 1: Lexical and Syntax Analysis */
     printf("┌──────────────────────────────────────────────────────────┐\n");
@@ -56,7 +63,12 @@ int main(int argc, char* argv[]) {
     printf("│ • Building Abstract Syntax Tree\n");
     printf("└──────────────────────────────────────────────────────────┘\n");
     
-    if (yyparse() == 0) {
+    BenchmarkResult* bench_parse = start_benchmark();
+    int parse_result = yyparse();
+    end_benchmark(bench_parse, "Phase 1: Lexical & Syntax Analysis");
+    free(bench_parse);
+    
+    if (parse_result == 0) {
         printf("✓ Parse successful - program is syntactically correct!\n\n");
         
         /* PHASE 2: AST Display */
@@ -65,7 +77,10 @@ int main(int argc, char* argv[]) {
         printf("├──────────────────────────────────────────────────────────┤\n");
         printf("│ Tree structure representing the program hierarchy:       │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
+        BenchmarkResult* bench_ast = start_benchmark();
         printAST(root, 0);
+        end_benchmark(bench_ast, "Phase 2: AST Display");
+        free(bench_ast);
         printf("\n");
         
         /* PHASE 3: Intermediate Code */
@@ -76,10 +91,13 @@ int main(int argc, char* argv[]) {
         printf("│ • Each instruction has at most 3 operands                │\n");
         printf("│ • Temporary variables (t0, t1, ...) for expressions      │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
+        BenchmarkResult* bench_tac = start_benchmark();
         initTAC();
         generateTAC(root);
         printTAC();
         printTACToFile2("tac.txt");
+        end_benchmark(bench_tac, "Phase 3: TAC Generation");
+        free(bench_tac);
         printf("\n");
         
         /* PHASE 4: Optimization */
@@ -90,9 +108,12 @@ int main(int argc, char* argv[]) {
         printf("│ • Constant folding (evaluate compile-time expressions)   │\n");
         printf("│ • Copy propagation (replace variables with values)       │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
+        BenchmarkResult* bench_opt = start_benchmark();
         optimizeTAC2();
         printOptimizedTAC2();
         printOptimizedTACToFile2("tac-optimized.txt");
+        end_benchmark(bench_opt, "Phase 4: Optimization");
+        free(bench_opt);
         printf("\n");
         
         /* PHASE 5: Code Generation */
@@ -104,7 +125,10 @@ int main(int argc, char* argv[]) {
         printf("│ • Using $t0-$t7 for temporary values                     │\n");
         printf("│ • System calls for print operations                      │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
+        BenchmarkResult* bench_mips = start_benchmark();
         generateMIPSFromOptimizedTAC2(argv[2]);
+        end_benchmark(bench_mips, "Phase 5: MIPS Code Generation");
+        free(bench_mips);
         printf("✓ MIPS assembly code generated to: %s\n", argv[2]);
         printf("\n");
         
@@ -112,7 +136,11 @@ int main(int argc, char* argv[]) {
         freeTACList(&tacList);
         freeTACList(&optimizedList);
         
-        printf("╔════════════════════════════════════════════════════════════╗\n");
+        // Print total compilation time
+        end_benchmark(bench_total, "TOTAL COMPILATION TIME");
+        free(bench_total);
+        
+        printf("\n╔════════════════════════════════════════════════════════════╗\n");
         printf("║                  COMPILATION SUCCESSFUL!                   ║\n");
         printf("║         Run the output file in a MIPS simulator            ║\n");
         printf("╚════════════════════════════════════════════════════════════╝\n");

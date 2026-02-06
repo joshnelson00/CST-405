@@ -48,8 +48,8 @@ int addVar(char* name, VarType type) {
     Symbol* entry = &currentSymTab->vars[currentSymTab->count];
     entry->name = strdup(name);
     entry->type = type;
-    entry->is_array = 0;
-    entry->array_size = 0;
+    entry->isArray = 0;
+    entry->arraySize = 0;
     entry->offset = currentSymTab->nextOffset;
     currentSymTab->nextOffset += 4; // assume 4 bytes per variable
     currentSymTab->count++;
@@ -83,8 +83,8 @@ int addArray(char* name, VarType type, int size) {
     Symbol* entry = &currentSymTab->vars[currentSymTab->count];
     entry->name = strdup(name);
     entry->type = type;
-    entry->is_array = 1;
-    entry->array_size = size;
+    entry->isArray = 1;
+    entry->arraySize = size;
     entry->offset = currentSymTab->nextOffset;
     currentSymTab->nextOffset += 4 * size; // allocate space for array
     currentSymTab->count++;
@@ -190,7 +190,7 @@ int isArray(char* name) {
 
     for (int i = 0; i < currentSymTab->count; i++) {
         if (strcmp(currentSymTab->vars[i].name, name) == 0) 
-            return currentSymTab->vars[i].is_array;
+            return currentSymTab->vars[i].isArray;
     }
     return 0;
 }
@@ -201,7 +201,7 @@ int getArraySize(char* name) {
 
     for (int i = 0; i < currentSymTab->count; i++) {
         if (strcmp(currentSymTab->vars[i].name, name) == 0) 
-            return currentSymTab->vars[i].array_size;
+            return currentSymTab->vars[i].arraySize;
     }
     return 0;
 }
@@ -300,15 +300,4 @@ int isArrayVar(char* name) {
         }
     }
     return 0;
-}
-
-int getArraySize(char* name) {
-    if (!currentSymTab) return -1;
-
-    for (int i = 0; i < currentSymTab->count; i++) {
-        if (strcmp(currentSymTab->vars[i].name, name) == 0 && currentSymTab->vars[i].isArray) {
-            return currentSymTab->vars[i].arraySize;
-        }
-    }
-    return -1;
 }
