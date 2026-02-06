@@ -10,6 +10,18 @@ SymbolTable* currentSymTab = NULL;  // current active scope
 
 extern int yyline;
 
+/* DJB2 Hash Function - O(1) lookup optimization */
+unsigned int hash(const char* str) {
+    unsigned int hash = 5381;
+    int c;
+    
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c;  // hash * 33 + c
+    }
+    
+    return hash % HASH_SIZE;
+}
+
 /* Initialize global symbol table */
 void initGlobalSymTab() {
     globalSymTab.func_count = 0;
@@ -23,7 +35,11 @@ void initSymTab() {
     if (!currentSymTab) currentSymTab = malloc(sizeof(SymbolTable));
     currentSymTab->count = 0;
     currentSymTab->nextOffset = 0;
-    printf("SYMBOL TABLE: Initialized\n");
+    // Initialize hash table to NULL
+    for (int i = 0; i < HASH_SIZE; i++) {
+        currentSymTab->hash_table[i] = NULL;
+    }
+    printf("SYMBOL TABLE: Initialized with hash table (O(1) lookup)\n");
     printSymTab();
 }
 
@@ -45,19 +61,26 @@ int addVar(char* name, VarType type) {
         return -1;
     }
 
+    // Allocate new symbol
     Symbol* entry = &currentSymTab->vars[currentSymTab->count];
     entry->name = strdup(name);
     entry->type = type;
     entry->isArray = 0;
     entry->arraySize = 0;
     entry->offset = currentSymTab->nextOffset;
+    entry->next = NULL;
     currentSymTab->nextOffset += 4; // assume 4 bytes per variable
     currentSymTab->count++;
 
-    printf("SYMBOL TABLE: Added '%s' (%s) at offset %d\n", 
+    // Add to hash table for O(1) lookup
+    unsigned int h = hash(name);
+    entry->next = currentSymTab->hash_table[h];
+    currentSymTab->hash_table[h] = entry;
+
+    printf("SYMBOL TABLE: Added '%s' (%s) at offset %d [hash=%u]\n", 
            name,
            type == TYPE_FLOAT ? "float" : type == TYPE_VOID ? "void" : "int",
-           entry->offset);
+           entry->offset, h);
 
     return entry->offset;
 }
@@ -86,13 +109,19 @@ int addArray(char* name, VarType type, int size) {
     entry->isArray = 1;
     entry->arraySize = size;
     entry->offset = currentSymTab->nextOffset;
+    entry->next = NULL;
     currentSymTab->nextOffset += 4 * size; // allocate space for array
     currentSymTab->count++;
 
-    printf("SYMBOL TABLE: Added array '%s[%d]' (%s) at offset %d\n", 
+    // Add to hash table for O(1) lookup
+    unsigned int h = hash(name);
+    entry->next = currentSymTab->hash_table[h];
+    currentSymTab->hash_table[h] = entry;
+
+    printf("SYMBOL TABLE: Added array '%s[%d]' (%s) at offset %d [hash=%u]\n", 
            name, size,
            type == TYPE_FLOAT ? "float" : type == TYPE_VOID ? "void" : "int",
-           entry->offset);
+           entry->offset, h);
 
     return entry->offset;
 }
@@ -122,6 +151,10 @@ int addFunction(char* name, VarType return_type, ASTNode* ast_node) {
     func->local_symtab = malloc(sizeof(SymbolTable));
     func->local_symtab->count = 0;
     func->local_symtab->nextOffset = 0;
+    // Initialize hash table for function's local scope
+    for (int i = 0; i < HASH_SIZE; i++) {
+        func->local_symtab->hash_table[i] = NULL;
+    }
     func->ast_node = ast_node;
 
     globalSymTab.func_count++;
@@ -157,23 +190,35 @@ void exitFunction() {
     currentSymTab = NULL;
 }
 
-/* Look up variable offset (local then global params if needed) */
+/* Look up variable offset using hash table O(1) lookup */
 int getVarOffset(char* name) {
     if (!currentSymTab) return -1;
 
-    for (int i = 0; i < currentSymTab->count; i++) {
-        if (strcmp(currentSymTab->vars[i].name, name) == 0) return currentSymTab->vars[i].offset;
+    unsigned int h = hash(name);
+    Symbol* node = currentSymTab->hash_table[h];
+    
+    while (node) {
+        if (strcmp(node->name, name) == 0) {
+            return node->offset;
+        }
+        node = node->next;
     }
 
     return -1; // not found
 }
 
-/* Look up variable type (local then global) */
+/* Look up variable type using hash table O(1) lookup */
 VarType getVarType(char* name) {
     if (!currentSymTab) return TYPE_INT;
 
-    for (int i = 0; i < currentSymTab->count; i++) {
-        if (strcmp(currentSymTab->vars[i].name, name) == 0) return currentSymTab->vars[i].type;
+    unsigned int h = hash(name);
+    Symbol* node = currentSymTab->hash_table[h];
+    
+    while (node) {
+        if (strcmp(node->name, name) == 0) {
+            return node->type;
+        }
+        node = node->next;
     }
 
     return TYPE_INT; // default
@@ -184,24 +229,34 @@ int isVarDeclared(char* name) {
     return getVarOffset(name) != -1;
 }
 
-/* Check if variable is an array */
+/* Check if variable is an array using hash table O(1) lookup */
 int isArray(char* name) {
     if (!currentSymTab) return 0;
 
-    for (int i = 0; i < currentSymTab->count; i++) {
-        if (strcmp(currentSymTab->vars[i].name, name) == 0) 
-            return currentSymTab->vars[i].isArray;
+    unsigned int h = hash(name);
+    Symbol* node = currentSymTab->hash_table[h];
+    
+    while (node) {
+        if (strcmp(node->name, name) == 0) {
+            return node->isArray;
+        }
+        node = node->next;
     }
     return 0;
 }
 
-/* Get size of array */
+/* Get size of array using hash table O(1) lookup */
 int getArraySize(char* name) {
     if (!currentSymTab) return 0;
 
-    for (int i = 0; i < currentSymTab->count; i++) {
-        if (strcmp(currentSymTab->vars[i].name, name) == 0) 
-            return currentSymTab->vars[i].arraySize;
+    unsigned int h = hash(name);
+    Symbol* node = currentSymTab->hash_table[h];
+    
+    while (node) {
+        if (strcmp(node->name, name) == 0) {
+            return node->arraySize;
+        }
+        node = node->next;
     }
     return 0;
 }
@@ -279,14 +334,20 @@ int addArrayVar(char* name, VarType type, int size) {
     entry->isArray = 1;
     entry->arraySize = size;
     entry->offset = currentSymTab->nextOffset;
+    entry->next = NULL;
     currentSymTab->nextOffset += 4 * size; // allocate space for the entire array
     currentSymTab->count++;
 
-    printf("SYMBOL TABLE: Added array '%s' (%s[%d]) at offset %d\n", 
+    // Add to hash table for O(1) lookup
+    unsigned int h = hash(name);
+    entry->next = currentSymTab->hash_table[h];
+    currentSymTab->hash_table[h] = entry;
+
+    printf("SYMBOL TABLE: Added array '%s' (%s[%d]) at offset %d [hash=%u]\n", 
            name,
            type == TYPE_FLOAT ? "float" : type == TYPE_VOID ? "void" : "int",
            size,
-           entry->offset);
+           entry->offset, h);
 
     return entry->offset;
 }
@@ -294,10 +355,14 @@ int addArrayVar(char* name, VarType type, int size) {
 int isArrayVar(char* name) {
     if (!currentSymTab) return 0;
 
-    for (int i = 0; i < currentSymTab->count; i++) {
-        if (strcmp(currentSymTab->vars[i].name, name) == 0) {
-            return currentSymTab->vars[i].isArray;
+    unsigned int h = hash(name);
+    Symbol* node = currentSymTab->hash_table[h];
+    
+    while (node) {
+        if (strcmp(node->name, name) == 0) {
+            return node->isArray;
         }
+        node = node->next;
     }
     return 0;
 }

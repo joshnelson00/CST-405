@@ -1,0 +1,70 @@
+Optimized TAC Instructions (v2):
+─────────────────────────────
+ 1: FUNC addNums
+ 2: PARAM a
+ 3: PARAM b
+ 4: DECL result
+ 5: t0 = a + b
+ 6: result = t0
+ 7: RETURN result
+ 8: FUNC multNums
+ 9: PARAM x
+10: PARAM y
+11: DECL product
+12: t1 = x * y
+13: product = t1
+14: RETURN product
+15: FUNC computeVal
+16: PARAM n
+17: DECL temp1
+18: DECL answer
+19: ARG 8
+20: ARG n
+21: t2 = CALL addNums
+22: temp1 = t2
+23: ARG 3
+24: ARG temp1
+25: t3 = CALL multNums
+26: answer = t3
+27: RETURN answer
+28: FUNC sumArrayTwo
+29: PARAM arr
+30: PARAM sz
+31: DECL sum
+32: t4 = arr[0]
+33: t5 = arr[1]
+34: t6 = t4 + t5
+35: sum = t6
+36: RETURN sum
+37: FUNC main
+38: ARRAY_DECL (null)[nums]
+39: 100[nums] = 0
+40: 50[nums] = 1
+41: t7 = nums[0]
+42: PRINT t7
+43: t8 = nums[1]
+44: PRINT t8
+45: DECL val1
+46: ARG 35
+47: ARG 15
+48: t9 = CALL addNums
+49: val1 = t9
+50: PRINT val1
+51: DECL val2
+52: ARG 8
+53: ARG 7
+54: t10 = CALL multNums
+55: val2 = t10
+56: PRINT val2
+57: DECL val3
+58: ARG 10
+59: t11 = CALL computeVal
+60: val3 = t11
+61: PRINT val3
+62: DECL val4
+63: ARG 2
+64: ARG nums
+65: t12 = CALL sumArrayTwo
+66: val4 = t12
+67: PRINT val4
+

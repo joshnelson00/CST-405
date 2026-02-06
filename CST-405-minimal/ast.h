@@ -3,6 +3,15 @@
 
 #include "symtab.h"  /* Include for VarType definition */
 
+/* MEMORY POOL FOR AST NODES - Performance optimization */
+#define POOL_SIZE 4096  /* 4KB chunks */
+
+typedef struct MemoryPool {
+    char memory[POOL_SIZE];
+    size_t used;
+    struct MemoryPool* next;
+} MemoryPool;
+
 /* ABSTRACT SYNTAX TREE (AST)
  * The AST is an intermediate representation of the program structure
  * It represents the hierarchical syntax of the source code
@@ -166,5 +175,9 @@ ASTNode* createFuncList(ASTNode* func1, ASTNode* func2);         /* Create funct
 
 /* AST DISPLAY FUNCTION */
 void printAST(ASTNode* node, int level);                        /* Pretty-print the AST */
+
+/* MEMORY POOL FUNCTIONS */
+void* ast_alloc(size_t size);                                   /* Allocate from pool */
+void free_all_pools();                                          /* Free all memory pools */
 
 #endif

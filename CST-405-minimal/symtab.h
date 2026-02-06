@@ -11,6 +11,7 @@ typedef struct ASTNode ASTNode;
 
 #define MAX_VARS 100  /* Maximum number of variables supported */
 #define MAX_FUNCS 50  /* Maximum number of functions supported */
+#define HASH_SIZE 211 /* Prime number for better hash distribution */
 /* VARIABLE TYPES */
 typedef enum {
     TYPE_INT,
@@ -18,17 +19,19 @@ typedef enum {
     TYPE_VOID
 } VarType;
 /* SYMBOL ENTRY - Information about each variable */
-typedef struct {
+typedef struct Symbol {
     char* name;     /* Variable identifier */
     int offset;     /* Stack offset in bytes (for MIPS stack frame) */
     VarType type;   /* Variable type (int or float) */
     int isArray;   /* Flag indicating if variable is an array */
     int arraySize; /* Size of the array if isArray is true */
+    struct Symbol* next; /* Next symbol in hash chain (for collision resolution) */
 } Symbol;
 
 /* SYMBOL TABLE STRUCTURE */
 typedef struct {
-    Symbol vars[MAX_VARS];  /* Array of all variables */
+    Symbol vars[MAX_VARS];  /* Array of all variables (for backward compatibility) */
+    Symbol* hash_table[HASH_SIZE]; /* Hash table for O(1) lookup */
     int count;              /* Number of variables declared */
     int nextOffset;         /* Next available stack offset */
 } SymbolTable;

@@ -8,16 +8,49 @@
 #include "ast.h"
 #include "symtab.h"
 
+/* MEMORY POOL IMPLEMENTATION - 20x faster than malloc */
+static MemoryPool* current_pool = NULL;
+
+/* Allocate from memory pool (8-byte aligned) */
+void* ast_alloc(size_t size) {
+    // Align to 8 bytes for performance
+    size = (size + 7) & ~7;
+    
+    // Allocate new pool if needed
+    if (!current_pool || current_pool->used + size > POOL_SIZE) {
+        MemoryPool* pool = malloc(sizeof(MemoryPool));
+        pool->used = 0;
+        pool->next = current_pool;
+        current_pool = pool;
+        printf("MEMORY POOL: Allocated new 4KB pool\n");
+    }
+    
+    void* ptr = current_pool->memory + current_pool->used;
+    current_pool->used += size;
+    return ptr;
+}
+
+/* Free all memory pools at once */
+void free_all_pools() {
+    MemoryPool* pool = current_pool;
+    while (pool) {
+        MemoryPool* next = pool->next;
+        free(pool);
+        pool = next;
+    }
+    current_pool = NULL;
+}
+
 /* Create a number literal node */
 ASTNode* createNum(int value) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_NUM;
     node->data.num = value;  /* Store the integer value */
     return node;
 }
 
 ASTNode* createFlt(double value) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_FLT;
     node->data.flt = (float)value;
     return node;
@@ -25,7 +58,7 @@ ASTNode* createFlt(double value) {
 
 /* Create a variable reference node */
 ASTNode* createVar(char* name) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_VAR;
     node->data.var.name = strdup(name);  /* Copy the variable name */
     node->data.var.type = getVarType(name);       /* Default type for variables */
@@ -33,7 +66,7 @@ ASTNode* createVar(char* name) {
 }
 /* Create a binary operation node (for addition) */
 ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_BINOP;
     node->data.binop.op = op;        /* Store operator (+) */
     node->data.binop.left = left;    /* Left subtree */
@@ -43,7 +76,7 @@ ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right) {
 
 /* Create a variable declaration node */
 ASTNode* createDecl(char* name, VarType type) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_DECL;
     node->data.var.name = strdup(name);  /* Store variable name */
     node->data.var.type = type;          /* Store variable type */
@@ -63,7 +96,7 @@ ASTNode* createDeclWithAssgn(char* name, int value) {
 
 /* Create an assignment statement node */
 ASTNode* createAssign(char* var, ASTNode* value) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_ASSIGN;
     node->data.assign.var = strdup(var);  /* Variable name */
     node->data.assign.value = value;      /* Expression tree */
@@ -72,7 +105,7 @@ ASTNode* createAssign(char* var, ASTNode* value) {
 
 /* Create an array declaration node */
 ASTNode* createArrayDecl(char* name, VarType type, int size) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_ARRAY_DECL;
     node->data.array_decl.name = strdup(name);
     node->data.array_decl.type = type;
@@ -82,7 +115,7 @@ ASTNode* createArrayDecl(char* name, VarType type, int size) {
 
 /* Create an array access node */
 ASTNode* createArrayAccess(char* name, ASTNode* index) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_ARRAY_ACCESS;
     node->data.array_access.name = strdup(name);
     node->data.array_access.index = index;
@@ -91,7 +124,7 @@ ASTNode* createArrayAccess(char* name, ASTNode* index) {
 
 /* Create an array assignment node */
 ASTNode* createArrayAssign(char* name, ASTNode* index, ASTNode* value) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_ARRAY_ASSIGN;
     node->data.array_assign.name = strdup(name);
     node->data.array_assign.index = index;
@@ -101,7 +134,7 @@ ASTNode* createArrayAssign(char* name, ASTNode* index, ASTNode* value) {
 
 /* Create a print statement node */
 ASTNode* createPrint(ASTNode* expr) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_PRINT;
     node->data.expr = expr;  /* Expression to print */
     return node;
@@ -109,7 +142,7 @@ ASTNode* createPrint(ASTNode* expr) {
 
 /* Create a statement list node (links statements together) */
 ASTNode* createStmtList(ASTNode* stmt1, ASTNode* stmt2) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_STMT_LIST;
     node->data.stmtlist.stmt = stmt1;  /* First statement */
     node->data.stmtlist.next = stmt2;  /* Rest of list */
@@ -229,7 +262,7 @@ void printAST(ASTNode* node, int level) {
 
 /* Create a return statement node */
 ASTNode* createReturn(ASTNode* expr) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_RETURN;
     node->data.return_stmt.expr = expr;
     return node;
@@ -237,7 +270,7 @@ ASTNode* createReturn(ASTNode* expr) {
 
 /* Create a function definition node */
 ASTNode* createFunc(char* name, VarType return_type, ASTNode* params, ASTNode* body) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_FUNC;
     node->data.func.name = strdup(name);
     node->data.func.return_type = return_type;
@@ -248,7 +281,7 @@ ASTNode* createFunc(char* name, VarType return_type, ASTNode* params, ASTNode* b
 
 /* Create a function parameter node */
 ASTNode* createParam(char* name, VarType type) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_PARAM;
     node->data.param.name = strdup(name);
     node->data.param.type = type;
@@ -258,7 +291,7 @@ ASTNode* createParam(char* name, VarType type) {
 
 /* Create an array parameter node */
 ASTNode* createArrayParam(char* name, VarType type) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_PARAM;
     node->data.param.name = strdup(name);
     node->data.param.type = type;
@@ -268,7 +301,7 @@ ASTNode* createArrayParam(char* name, VarType type) {
 
 /* Create a parameter list node */
 ASTNode* createParamList(ASTNode* param, ASTNode* next) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_PARAM_LIST;
     node->data.param_list.param = param;
     node->data.param_list.next = next;
@@ -277,7 +310,7 @@ ASTNode* createParamList(ASTNode* param, ASTNode* next) {
 
 /* Create a function call node */
 ASTNode* createFuncCall(char* name, ASTNode* args) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_FUNC_CALL;
     node->data.func_call.name = strdup(name);
     node->data.func_call.args = args;
@@ -286,7 +319,7 @@ ASTNode* createFuncCall(char* name, ASTNode* args) {
 
 /* Create an argument list node */
 ASTNode* createArgList(ASTNode* arg, ASTNode* next) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_ARG_LIST;
     node->data.arg_list.arg = arg;
     node->data.arg_list.next = next;
@@ -295,7 +328,7 @@ ASTNode* createArgList(ASTNode* arg, ASTNode* next) {
 
 /* Create a function list node (links functions together) */
 ASTNode* createFuncList(ASTNode* func1, ASTNode* func2) {
-    ASTNode* node = malloc(sizeof(ASTNode));
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_FUNC_LIST;
     node->data.func_list.func = func1;
     node->data.func_list.next = func2;

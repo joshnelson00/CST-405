@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,4 +53,17 @@ char* intern_string(const char* str) {
 
     string_pool.unique_strings++;
     return interned;
+}
+
+void print_string_stats() {
+    printf("STRING POOL STATS:\n");
+    printf("  Total requests: %d\n", string_pool.total_requests);
+    printf("  Unique strings: %d\n", string_pool.unique_strings);
+    printf("  Pool usage: %zu/%d bytes (%.1f%%)\n", 
+           string_pool.pool_used, STRING_POOL_SIZE,
+           (100.0 * string_pool.pool_used) / STRING_POOL_SIZE);
+    if (string_pool.total_requests > 0) {
+        float savings = 100.0 * (1.0 - (float)string_pool.unique_strings / string_pool.total_requests);
+        printf("  Memory savings: %.1f%%\n", savings);
+    }
 }

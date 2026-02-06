@@ -4,7 +4,7 @@ YACC = bison
 CFLAGS = -g -Wall
 
 TARGET = minicompiler
-OBJS = lex.yy.o parser.tab.o main.o ast.o symtab.o codegen.o tac.o optimizer.o mips.o benchmark.o
+OBJS = lex.yy.o parser.tab.o main.o ast.o symtab.o codegen.o tac.o optimizer.o mips.o benchmark.o stringpool.o
 
 all: $(TARGET)
 
@@ -47,6 +47,9 @@ mips.o: mips.c mips.h
 
 benchmark.o: benchmark.c benchmark.h
 	$(CC) $(CFLAGS) -c benchmark.c
+
+stringpool.o: stringpool.c stringpool.h
+	$(CC) $(CFLAGS) -c stringpool.c
 
 clean:
 	rm -f $(TARGET) $(OBJS) lex.yy.c parser.tab.c parser.tab.h *.s tac.txt tac-optimized.txt

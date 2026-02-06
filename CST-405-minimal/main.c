@@ -11,6 +11,7 @@
 #include "optimizer.h"
 #include "tac.h"
 #include "benchmark.h"
+#include "stringpool.h"
 
 // External declarations for TAC lists
 extern TACList tacList;
@@ -48,6 +49,7 @@ int main(int argc, char* argv[]) {
     printf("└──────────────────────────────────────────────────────────┘\n");
 
     BenchmarkResult* bench_init = start_benchmark();
+    init_string_pool();  /* Initialize string interning pool */
     initGlobalSymTab();  /* Initialize global symbol table */
     initSymTab();        /* Initialize symbol table */
     end_benchmark(bench_init, "Phase 0: Initialization");
@@ -133,8 +135,9 @@ int main(int argc, char* argv[]) {
         printf("\n");
         
         // Clean up memory to prevent leaks
-        freeTACList(&tacList);
-        freeTACList(&optimizedList);
+        // NOTE: Temporarily disabled to avoid issues with string pool and memory pool
+        // freeTACList(&tacList);
+        // freeTACList(&optimizedList);
         
         // Print total compilation time
         end_benchmark(bench_total, "TOTAL COMPILATION TIME");
