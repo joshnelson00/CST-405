@@ -133,15 +133,93 @@ int addParam(char* name, VarType type) {
 
 /* Add function to global table */
 int addFunction(char* name, VarType return_type, ASTNode* ast_node) {
+    // Check if function was already prepared (via prepareFunctionScope)
+    for (int i = 0; i < globalSymTab.func_count; i++) {
+        if (strcmp(globalSymTab.funcs[i].name, name) == 0) {
+            // Function exists, just update AST and count parameters
+            globalSymTab.funcs[i].ast_node = ast_node;
+            
+            // Count parameters from AST
+            int param_count = 0;
+            if (ast_node && ast_node->data.func.params) {
+                ASTNode* param_list = ast_node->data.func.params;
+                while (param_list) {
+                    if (param_list->type == NODE_PARAM) {
+                        param_count++;
+                        break;
+                    } else if (param_list->type == NODE_PARAM_LIST) {
+                        param_count++;
+                        param_list = param_list->data.param_list.next;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            globalSymTab.funcs[i].param_count = param_count;
+            
+            printf("GLOBAL SYMBOL TABLE: Updated function '%s' with AST (%d params)\n", 
+                   name, param_count);
+            return i;
+        }
+    }
+    
+    // Function doesn't exist yet, create it (old behavior for compatibility)
+    if (globalSymTab.func_count >= MAX_FUNCS) {
+        fprintf(stderr, "❌ Error: Function table full (max %d functions)\n", MAX_FUNCS);
+        return -1;
+    }
+
+    FunctionSymbol* func = &globalSymTab.funcs[globalSymTab.func_count];
+    func->name = strdup(name);
+    func->return_type = return_type;
+    
+    // Count parameters from AST
+    int param_count = 0;
+    if (ast_node && ast_node->data.func.params) {
+        ASTNode* param_list = ast_node->data.func.params;
+        while (param_list) {
+            if (param_list->type == NODE_PARAM) {
+                param_count++;
+                break;
+            } else if (param_list->type == NODE_PARAM_LIST) {
+                param_count++;
+                param_list = param_list->data.param_list.next;
+            } else {
+                break;
+            }
+        }
+    }
+    func->param_count = param_count;
+    
+    func->local_symtab = malloc(sizeof(SymbolTable));
+    func->local_symtab->count = 0;
+    func->local_symtab->nextOffset = 0;
+    // Initialize hash table for function's local scope
+    for (int i = 0; i < HASH_SIZE; i++) {
+        func->local_symtab->hash_table[i] = NULL;
+    }
+    func->ast_node = ast_node;
+
+    globalSymTab.func_count++;
+    printf("GLOBAL SYMBOL TABLE: Added function '%s' (%s) with %d params\n",
+           name,
+           return_type == TYPE_FLOAT ? "float" : return_type == TYPE_VOID ? "void" : "int",
+           param_count);
+
+    return globalSymTab.func_count - 1;
+}
+
+/* Prepare function scope - creates function entry and activates its scope */
+void prepareFunctionScope(char* name, VarType return_type) {
     if (isFunctionDeclared(name)) {
         fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
         fprintf(stderr, "   Function '%s' already declared\n", name);
-        return -1;
+        return;
     }
 
     if (globalSymTab.func_count >= MAX_FUNCS) {
         fprintf(stderr, "❌ Error: Function table full (max %d functions)\n", MAX_FUNCS);
-        return -1;
+        return;
     }
 
     FunctionSymbol* func = &globalSymTab.funcs[globalSymTab.func_count];
@@ -155,14 +233,16 @@ int addFunction(char* name, VarType return_type, ASTNode* ast_node) {
     for (int i = 0; i < HASH_SIZE; i++) {
         func->local_symtab->hash_table[i] = NULL;
     }
-    func->ast_node = ast_node;
+    func->ast_node = NULL;  // Will be set later
 
+    globalSymTab.current_func_index = globalSymTab.func_count;
+    globalSymTab.current_local = func->local_symtab;
+    currentSymTab = func->local_symtab;
+    
     globalSymTab.func_count++;
-    printf("GLOBAL SYMBOL TABLE: Added function '%s' (%s)\n",
+    printf("PREPARE FUNCTION SCOPE: '%s' (%s) - scope activated\n",
            name,
            return_type == TYPE_FLOAT ? "float" : return_type == TYPE_VOID ? "void" : "int");
-
-    return globalSymTab.func_count - 1;
 }
 
 /* Enter function scope */
@@ -266,6 +346,27 @@ int isFunctionDeclared(char* name) {
     for (int i = 0; i < globalSymTab.func_count; i++) {
         if (strcmp(globalSymTab.funcs[i].name, name) == 0) return 1;
     }
+    return 0;
+}
+
+/* Validate function call argument count */
+int validateFunctionCall(char* func_name, int arg_count) {
+    for (int i = 0; i < globalSymTab.func_count; i++) {
+        if (strcmp(globalSymTab.funcs[i].name, func_name) == 0) {
+            if (globalSymTab.funcs[i].param_count != arg_count) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Function '%s' expects %d argument%s but got %d\n",
+                       func_name, 
+                       globalSymTab.funcs[i].param_count,
+                       globalSymTab.funcs[i].param_count == 1 ? "" : "s",
+                       arg_count);
+                return 0;  // Validation failed
+            }
+            return 1;  // Validation passed
+        }
+    }
+    fprintf(stderr, "\n❌ Semantic Error at line %d: Function '%s' not declared\n", 
+            yyline, func_name);
     return 0;
 }
 

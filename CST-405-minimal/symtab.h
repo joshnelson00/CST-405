@@ -61,6 +61,7 @@ int getVarOffset(char* name);    /* Get stack offset for variable, -1 if not fou
 VarType getVarType(char* name);   /* Get type for variable, returns TYPE_INT if not found */
 VarType getVarTypeByName(const char* name);
 int isVarDeclared(char* name);   /* Check if variable exists (1=yes, 0=no) */
+void prepareFunctionScope(char* name, VarType return_type); /* Prepare function scope for parsing */
 void enterFunction(char* name);  /* Enter function scope */
 void exitFunction();             /* Exit function scope */
 int isFunctionDeclared(char* name); /* Check if function exists */
@@ -70,4 +71,5 @@ void printGlobalSymTab();        /* Print global symbol table */
 int addArrayVar(char* name, VarType type, int size); /* Add array variable */
 int isArrayVar(char* name); /* Check if variable is an array */
 int getArraySize(char* name); /* Get size of array variable */
+int validateFunctionCall(char* func_name, int arg_count); /* Validate function call argument count */
 #endif

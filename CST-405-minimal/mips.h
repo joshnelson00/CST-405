@@ -28,7 +28,10 @@ typedef enum {
     MIPS_JR,        /* Jump register: jr $reg */
     MIPS_LABEL,     /* Label: name: */
     MIPS_SYSCALL,   /* System call */
-    MIPS_COMMENT    /* Comment line */
+    MIPS_COMMENT,   /* Comment line */
+    MIPS_BEQZ,      /* Branch if equal to zero: beqz $reg, label */
+    MIPS_BLTZ,      /* Branch if less than zero: bltz $reg, label */
+    MIPS_BGE        /* Branch if greater or equal: bge $reg1, $reg2, label */
 } MIPSOp;
 
 /* MIPS INSTRUCTION STRUCTURE */

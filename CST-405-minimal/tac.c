@@ -87,7 +87,11 @@ char* generateTACExpr(ASTNode* node) {
                 case '+': appendTAC(createTAC(TAC_ADD, left, right, temp)); break;
                 case '-': appendTAC(createTAC(TAC_SUBTRACT, left, right, temp)); break;
                 case '*': appendTAC(createTAC(TAC_MULTIPLY, left, right, temp)); break;
-                case '/': appendTAC(createTAC(TAC_DIVIDE, left, right, temp)); break;
+                case '/': 
+                    // Emit divide-by-zero check before division
+                    appendTAC(createTAC(TAC_DIV_CHECK, right, NULL, NULL));
+                    appendTAC(createTAC(TAC_DIVIDE, left, right, temp)); 
+                    break;
             }
             return temp;
         }
@@ -101,8 +105,17 @@ char* generateTACExpr(ASTNode* node) {
         }
         case NODE_ARRAY_ACCESS: {
             char* index = generateTACExpr(node->data.array_access.index);
+            char* array_name = node->data.array_access.name;
+            
+            // Emit bounds check instruction
+            if (isArrayVar(array_name)) {
+                char size_str[32];
+                sprintf(size_str, "%d", getArraySize(array_name));
+                appendTAC(createTAC(TAC_BOUNDS_CHECK, array_name, index, size_str));
+            }
+            
             char* temp = newTemp();
-            appendTAC(createTAC(TAC_ARRAY_READ, node->data.array_access.name, index, temp));
+            appendTAC(createTAC(TAC_ARRAY_READ, array_name, index, temp));
             return temp;
         }
         default:
@@ -133,7 +146,7 @@ void generateTAC(ASTNode* node) {
 
         case NODE_RETURN: {
             if (node->data.return_stmt.expr) {
-                char* expr = generateTACExpr(node->data.return_stmt.expr);
+                char* expr = generateTACExpr(node->data.return_stmt.expr); // may be ARRAY_ACCESS
                 appendTAC(createTAC(TAC_RETURN, expr, NULL, NULL));
             } else {
                 appendTAC(createTAC(TAC_RETURN, NULL, NULL, NULL));
@@ -148,8 +161,10 @@ void generateTAC(ASTNode* node) {
 
         case NODE_FUNC: {
             appendTAC(createTAC(TAC_FUNC_DEF, node->data.func.name, NULL, NULL));
+            enterFunction(node->data.func.name);  // Enter function scope for TAC generation
             if (node->data.func.params) generateTAC(node->data.func.params);
             if (node->data.func.body) generateTAC(node->data.func.body);
+            exitFunction();  // Exit function scope
             if (node->data.func.next) generateTAC(node->data.func.next);
             break;
         }
@@ -179,7 +194,16 @@ void generateTAC(ASTNode* node) {
         case NODE_ARRAY_ASSIGN: {
             char* index = generateTACExpr(node->data.array_assign.index);
             char* value = generateTACExpr(node->data.array_assign.value);
-            appendTAC(createTAC(TAC_ARRAY_WRITE, node->data.array_assign.name, index, value));
+            char* array_name = node->data.array_assign.name;
+            
+            // Emit bounds check instruction
+            if (isArrayVar(array_name)) {
+                char size_str[32];
+                sprintf(size_str, "%d", getArraySize(array_name));
+                appendTAC(createTAC(TAC_BOUNDS_CHECK, array_name, index, size_str));
+            }
+            
+            appendTAC(createTAC(TAC_ARRAY_WRITE, array_name, index, value));
             break;
         }
         default:
@@ -263,6 +287,12 @@ void printTACToFile(const char* filename) {
             case TAC_ARRAY_READ:
                 fprintf(file, " %d: ARRAY_READ %s[%s] -> %s    // Array access\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
+            case TAC_BOUNDS_CHECK:
+                fprintf(file, " %d: BOUNDS_CHECK %s[%s] < %s   // Runtime bounds check\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_DIV_CHECK:
+                fprintf(file, " %d: DIV_CHECK %s != 0          // Runtime divide-by-zero check\n", instrNum++, curr->arg1);
+                break;
             default:
                 break;
         }
@@ -304,6 +334,12 @@ void printTAC() {
                 break;
             case TAC_ARRAY_READ:
                 printf("ARRAY_READ %s[%s] -> %s\n", curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_BOUNDS_CHECK:
+                printf("BOUNDS_CHECK %s[%s] < %s\n", curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_DIV_CHECK:
+                printf("DIV_CHECK %s != 0\n", curr->arg1);
                 break;
             default: break;
         }

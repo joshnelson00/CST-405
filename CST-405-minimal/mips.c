@@ -270,6 +270,33 @@ void printMIPS(MIPSList* list, FILE* output) {
                     }
                 }
                 break;
+            case MIPS_BEQZ:
+                if (curr->result && curr->arg1) {
+                    if (curr->comment) {
+                        fprintf(output, "    beqz %s, %s        # %s\n", curr->result, curr->arg1, curr->comment);
+                    } else {
+                        fprintf(output, "    beqz %s, %s\n", curr->result, curr->arg1);
+                    }
+                }
+                break;
+            case MIPS_BLTZ:
+                if (curr->result && curr->arg1) {
+                    if (curr->comment) {
+                        fprintf(output, "    bltz %s, %s        # %s\n", curr->result, curr->arg1, curr->comment);
+                    } else {
+                        fprintf(output, "    bltz %s, %s\n", curr->result, curr->arg1);
+                    }
+                }
+                break;
+            case MIPS_BGE:
+                if (curr->result && curr->arg1 && curr->arg2) {
+                    if (curr->comment) {
+                        fprintf(output, "    bge %s, %s, %s    # %s\n", curr->result, curr->arg1, curr->arg2, curr->comment);
+                    } else {
+                        fprintf(output, "    bge %s, %s, %s\n", curr->result, curr->arg1, curr->arg2);
+                    }
+                }
+                break;
         }
         curr = curr->next;
     }

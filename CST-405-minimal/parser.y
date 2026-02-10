@@ -71,56 +71,66 @@ func_list:
 
 /* FUNCTION RULES */
 func:
-    INT ID '(' param_list ')' '{' stmt_list '}' { 
-        $$ = createFunc($2, TYPE_INT, $4, $7);  /* Function with return type and parameters */
-        addFunction($2, TYPE_INT, $$);         /* Add to global symbol table */
+    INT ID '(' param_list ')' { prepareFunctionScope($2, TYPE_INT); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($2, TYPE_INT, $4, $8);  /* Function with return type and parameters */
+        addFunction($2, TYPE_INT, $$);         /* Update with AST */
         free($2);
     }
-    | INT ID '(' ')' '{' stmt_list '}' { 
-        $$ = createFunc($2, TYPE_INT, NULL, $6);  /* Function with no parameters */
-        addFunction($2, TYPE_INT, $$);            /* Add to global symbol table */
+    | INT ID '(' ')' { prepareFunctionScope($2, TYPE_INT); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($2, TYPE_INT, NULL, $7);  /* Function with no parameters */
+        addFunction($2, TYPE_INT, $$);            /* Update with AST */
         free($2);
     }
-    | FLOAT ID '(' param_list ')' '{' stmt_list '}' { 
-        $$ = createFunc($2, TYPE_FLOAT, $4, $7);  /* Float function with parameters */
-        addFunction($2, TYPE_FLOAT, $$);           /* Add to global symbol table */
+    | FLOAT ID '(' param_list ')' { prepareFunctionScope($2, TYPE_FLOAT); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($2, TYPE_FLOAT, $4, $8);  /* Float function with parameters */
+        addFunction($2, TYPE_FLOAT, $$);           /* Update with AST */
         free($2);
     }
-    | FLOAT ID '(' ')' '{' stmt_list '}' { 
-        $$ = createFunc($2, TYPE_FLOAT, NULL, $6);  /* Float function with no parameters */
-        addFunction($2, TYPE_FLOAT, $$);            /* Add to global symbol table */
+    | FLOAT ID '(' ')' { prepareFunctionScope($2, TYPE_FLOAT); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($2, TYPE_FLOAT, NULL, $7);  /* Float function with no parameters */
+        addFunction($2, TYPE_FLOAT, $$);            /* Update with AST */
         free($2);
     }
-    | VOID ID '(' param_list ')' '{' stmt_list '}' { 
-        $$ = createFunc($2, TYPE_VOID, $4, $7);  /* Void function with parameters */
-        addFunction($2, TYPE_VOID, $$);           /* Add to global symbol table */
+    | VOID ID '(' param_list ')' { prepareFunctionScope($2, TYPE_VOID); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($2, TYPE_VOID, $4, $8);  /* Void function with parameters */
+        addFunction($2, TYPE_VOID, $$);           /* Update with AST */
         free($2);
     }
-    | VOID ID '(' ')' '{' stmt_list '}' { 
-        $$ = createFunc($2, TYPE_VOID, NULL, $6);  /* Void function with no parameters */
-        addFunction($2, TYPE_VOID, $$);            /* Add to global symbol table */
+    | VOID ID '(' ')' { prepareFunctionScope($2, TYPE_VOID); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($2, TYPE_VOID, NULL, $7);  /* Void function with no parameters */
+        addFunction($2, TYPE_VOID, $$);            /* Update with AST */
         free($2);
     }
-    | INT '[' ']' ID '(' param_list ')' '{' stmt_list '}' { 
-        $$ = createFunc($4, TYPE_INT, $6, $9);  /* Function returning int array with parameters */
+    | INT '[' ']' ID '(' param_list ')' { prepareFunctionScope($4, TYPE_INT); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($4, TYPE_INT, $6, $10);  /* Function returning int array with parameters */
         $$->data.func.return_type = TYPE_INT;
         addFunction($4, TYPE_INT, $$);
         free($4);
     }
-    | INT '[' ']' ID '(' ')' '{' stmt_list '}' { 
-        $$ = createFunc($4, TYPE_INT, NULL, $8);  /* Function returning int array, no parameters */
+    | INT '[' ']' ID '(' ')' { prepareFunctionScope($4, TYPE_INT); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($4, TYPE_INT, NULL, $9);  /* Function returning int array, no parameters */
         $$->data.func.return_type = TYPE_INT;
         addFunction($4, TYPE_INT, $$);
         free($4);
     }
-    | FLOAT '[' ']' ID '(' param_list ')' '{' stmt_list '}' { 
-        $$ = createFunc($4, TYPE_FLOAT, $6, $9);  /* Function returning float array with parameters */
+    | FLOAT '[' ']' ID '(' param_list ')' { prepareFunctionScope($4, TYPE_FLOAT); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($4, TYPE_FLOAT, $6, $10);  /* Function returning float array with parameters */
         $$->data.func.return_type = TYPE_FLOAT;
         addFunction($4, TYPE_FLOAT, $$);
         free($4);
     }
-    | FLOAT '[' ']' ID '(' ')' '{' stmt_list '}' { 
-        $$ = createFunc($4, TYPE_FLOAT, NULL, $8);  /* Function returning float array, no parameters */
+    | FLOAT '[' ']' ID '(' ')' { prepareFunctionScope($4, TYPE_FLOAT); } '{' stmt_list '}' { 
+        exitFunction();
+        $$ = createFunc($4, TYPE_FLOAT, NULL, $9);  /* Function returning float array, no parameters */
         $$->data.func.return_type = TYPE_FLOAT;
         addFunction($4, TYPE_FLOAT, $$);
         free($4);
@@ -215,7 +225,22 @@ assign:
         free($1);                   
     } 
     | ID '[' expr ']' '=' expr ';' {
-        /* Array element assignment */
+        /* Array element assignment with bounds checking */
+        // Check if index is constant and in bounds
+        if ($3->type == NODE_NUM) {
+            int index = $3->data.num;
+            if (isArrayVar($1)) {
+                int size = getArraySize($1);
+                if (index < 0) {
+                    fprintf(stderr, "\n⚠️  Warning at line %d:\n", yyline);
+                    fprintf(stderr, "   Array '%s' index %d is negative (out of bounds)\n", $1, index);
+                } else if (index >= size) {
+                    fprintf(stderr, "\n⚠️  Warning at line %d:\n", yyline);
+                    fprintf(stderr, "   Array '%s' index %d is out of bounds [0..%d]\n",
+                           $1, index, size - 1);
+                }
+            }
+        }
         $$ = createArrayAssign($1, $3, $6); /* $1 = ID, $3 = index expr, $6 = value expr */
         free($1);                           /* Free the identifier string */
     }
@@ -252,7 +277,22 @@ expr:
         $$ = $2;
     }
     | ID '[' expr ']' {
-        /* Array element access */
+        /* Array element access with bounds checking */
+        // Check if index is constant and in bounds
+        if ($3->type == NODE_NUM) {
+            int index = $3->data.num;
+            if (isArrayVar($1)) {
+                int size = getArraySize($1);
+                if (index < 0) {
+                    fprintf(stderr, "\n⚠️  Warning at line %d:\n", yyline);
+                    fprintf(stderr, "   Array '%s' index %d is negative (out of bounds)\n", $1, index);
+                } else if (index >= size) {
+                    fprintf(stderr, "\n⚠️  Warning at line %d:\n", yyline);
+                    fprintf(stderr, "   Array '%s' index %d is out of bounds [0..%d]\n",
+                           $1, index, size - 1);
+                }
+            }
+        }
         $$ = createArrayAccess($1, $3);  /* $1 = ID, $3 = index expression */
         free($1);                        /* Free the identifier string */
     }

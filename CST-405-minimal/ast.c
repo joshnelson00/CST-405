@@ -310,6 +310,25 @@ ASTNode* createParamList(ASTNode* param, ASTNode* next) {
 
 /* Create a function call node */
 ASTNode* createFuncCall(char* name, ASTNode* args) {
+    // Count arguments
+    int arg_count = 0;
+    ASTNode* arg_list = args;
+    while (arg_list) {
+        if (arg_list->type == NODE_ARG_LIST) {
+            arg_count++;
+            arg_list = arg_list->data.arg_list.next;
+        } else {
+            // Single argument (not in a list)
+            arg_count++;
+            break;
+        }
+    }
+    
+    // Validate parameter count
+    if (!validateFunctionCall(name, arg_count)) {
+        // Error already printed, but still create node for error recovery
+    }
+    
     ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_FUNC_CALL;
     node->data.func_call.name = strdup(name);

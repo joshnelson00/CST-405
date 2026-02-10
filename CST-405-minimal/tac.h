@@ -25,7 +25,9 @@ typedef enum {
     TAC_FUNC_CALL,   /* Function call: result = call func(args) */
     TAC_PARAM,       /* Function parameter: param name */
     TAC_RETURN,      /* Return statement: return expr */
-    TAC_ARG          /* Function argument: arg expr */
+    TAC_ARG,         /* Function argument: arg expr */
+    TAC_BOUNDS_CHECK,/* Bounds check: check arg1[arg2] < result(size) */
+    TAC_DIV_CHECK    /* Divide-by-zero check: verify arg1 != 0 */
 } TACOp;
 
 /* TAC INSTRUCTION STRUCTURE */

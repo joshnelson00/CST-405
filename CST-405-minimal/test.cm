@@ -1,3 +1,9 @@
+int unusedHelper(int x, int y) {
+    int z;
+    z = x - y;
+    return z;
+}
+
 int addNums(int a, int b) {
     int result;
     result = a + b;
@@ -25,27 +31,37 @@ int sumArrayTwo(int arr[], int sz) {
 }
 
 void main() {
-    int nums[3];
-    
+    int nums[5];
+    int val1;
+    int val2;
+    int val3;
+    int val4;
+
     nums[0] = 100;
     nums[1] = 50;
-    
+    nums[2] = 25;
+
+    val1 = 5 + 3;
+    val2 = 10 * 2;
+    val1 = val1 + 0;
+    val2 = val2 * 1;
+    val3 = val1 * 0;
+
     print(nums[0]);
     print(nums[1]);
-    
-    int val1;
+    print(val1);
+    print(val2);
+    print(val3);
+
     val1 = addNums(15, 35);
     print(val1);
-    
-    int val2;
+
     val2 = multNums(7, 8);
     print(val2);
-    
-    int val3;
+
     val3 = computeVal(10);
     print(val3);
-    
-    int val4;
+
     val4 = sumArrayTwo(nums, 2);
     print(val4);
 }
