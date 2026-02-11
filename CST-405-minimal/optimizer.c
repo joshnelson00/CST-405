@@ -1,61 +1,3 @@
-    // Emit MIPS for all optimized TAC instructions (main function)
-    curr = optimizedList.head;
-    while (curr) {
-        if (curr->op == TAC_ASSIGN) {
-            // Assignment: result = arg1
-            char* dest = curr->result;
-            char* src = curr->arg1;
-            int destOffset = getOptimizerVarOffset(dest);
-            if (isTemporary(src)) {
-                // Store from $tN to stack
-                if (destOffset != -1) {
-                    char offsetStr[32];
-                    sprintf(offsetStr, "%d($fp)", destOffset);
-                    appendMIPS(&mipsList, createMIPS(MIPS_SW, tempToReg(src), offsetStr, NULL, NULL));
-                }
-            } else if ((src && isdigit(src[0])) || (src && src[0] == '-' && isdigit(src[1]))) {
-                // Immediate assignment
-                if (destOffset != -1) {
-                    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$t7", src, NULL, NULL));
-                    char offsetStr[32];
-                    sprintf(offsetStr, "%d($fp)", destOffset);
-                    appendMIPS(&mipsList, createMIPS(MIPS_SW, "$t7", offsetStr, NULL, NULL));
-                }
-            } else if (src) {
-                // Assignment from another variable
-                int srcOffset = getOptimizerVarOffset(src);
-                if (srcOffset != -1 && destOffset != -1) {
-                    char srcOffsetStr[32], destOffsetStr[32];
-                    sprintf(srcOffsetStr, "%d($fp)", srcOffset);
-                    sprintf(destOffsetStr, "%d($fp)", destOffset);
-                    appendMIPS(&mipsList, createMIPS(MIPS_LW, "$t7", srcOffsetStr, NULL, NULL));
-                    appendMIPS(&mipsList, createMIPS(MIPS_SW, "$t7", destOffsetStr, NULL, NULL));
-                }
-            }
-        } else if (curr->op == TAC_PRINT) {
-            // Print: print arg1
-            char* val = curr->arg1;
-            if (isTemporary(val)) {
-                appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", tempToReg(val), NULL, NULL));
-            } else if ((val && isdigit(val[0])) || (val && val[0] == '-' && isdigit(val[1]))) {
-                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", val, NULL, NULL));
-            } else if (val) {
-                int valOffset = getOptimizerVarOffset(val);
-                if (valOffset != -1) {
-                    char offsetStr[32];
-                    sprintf(offsetStr, "%d($fp)", valOffset);
-                    appendMIPS(&mipsList, createMIPS(MIPS_LW, "$a0", offsetStr, NULL, NULL));
-                }
-            }
-            appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "1", NULL, NULL));
-            appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
-            // Print newline
-            appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "11", NULL, NULL));
-            appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", "10", NULL, NULL));
-            appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
-        }
-        curr = curr->next;
-    }
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -107,7 +49,7 @@ char* tempToReg(char* temp) {
     return temp; // Return as-is if not a temporary
 }
 
-void optimizeTAC() {
+void optimizeTAC2() {
     TACInstr* curr = tacList.head;
     
     // Copy propagation table
@@ -176,10 +118,10 @@ void optimizeTAC() {
                 }
 
                 if (isConst(left) && isConst(right)) {
-                    double result = atof(left) * atof(right);
-                    char* resultStr = malloc(32);
+                    int result = atoi(left) * atoi(right);
+                    char* resultStr = malloc(20);
 
-                    sprintf(resultStr, "%.6f", result);
+                    sprintf(resultStr, "%d", result);
 
                     values[valueCount].var = strdup(curr->result);
                     values[valueCount].value = resultStr;
@@ -225,12 +167,62 @@ void optimizeTAC() {
                 break;
             }
             
+            case TAC_SUBTRACT: {
+                char* left = curr->arg1;
+                char* right = curr->arg2;
+                for (int i = valueCount - 1; i >= 0; i--) {
+                    if (strcmp(values[i].var, left) == 0) { left = values[i].value; break; }
+                }
+                for (int i = valueCount - 1; i >= 0; i--) {
+                    if (strcmp(values[i].var, right) == 0) { right = values[i].value; break; }
+                }
+                if (isConst(left) && isConst(right)) {
+                    int result = atoi(left) - atoi(right);
+                    char* resultStr = malloc(20);
+                    sprintf(resultStr, "%d", result);
+                    values[valueCount].var = strdup(curr->result);
+                    values[valueCount].value = resultStr;
+                    valueCount++;
+                    newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
+                } else {
+                    newInstr = createTAC(TAC_SUBTRACT, left, right, curr->result);
+                }
+                break;
+            }
+            case TAC_DIVIDE: {
+                char* left = curr->arg1;
+                char* right = curr->arg2;
+                for (int i = valueCount - 1; i >= 0; i--) {
+                    if (strcmp(values[i].var, left) == 0) { left = values[i].value; break; }
+                }
+                for (int i = valueCount - 1; i >= 0; i--) {
+                    if (strcmp(values[i].var, right) == 0) { right = values[i].value; break; }
+                }
+                if (isConst(left) && isConst(right) && atoi(right) != 0) {
+                    int result = atoi(left) / atoi(right);
+                    char* resultStr = malloc(20);
+                    sprintf(resultStr, "%d", result);
+                    values[valueCount].var = strdup(curr->result);
+                    values[valueCount].value = resultStr;
+                    valueCount++;
+                    newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
+                } else {
+                    newInstr = createTAC(TAC_DIVIDE, left, right, curr->result);
+                }
+                break;
+            }
             case TAC_FUNC_DEF:
             case TAC_PARAM:
             case TAC_FUNC_CALL:
             case TAC_RETURN:
-            case TAC_ARG: {
-                // Preserve all function-related instructions
+            case TAC_ARG:
+            case TAC_DECL:
+            case TAC_ARRAY_DECL:
+            case TAC_ARRAY_WRITE:
+            case TAC_ARRAY_READ:
+            case TAC_BOUNDS_CHECK:
+            case TAC_DIV_CHECK: {
+                // Preserve these instructions as-is
                 newInstr = createTAC(curr->op, curr->arg1, curr->arg2, curr->result);
                 break;
             }
@@ -244,162 +236,352 @@ void optimizeTAC() {
     }
 }
 
-// Generate MIPS from optimized TAC - FIXED VERSION
-void generateMIPSFromOptimizedTAC(const char* filename) {
-    FILE* output = fopen(filename, "w");
-    if (!output) {
-        fprintf(stderr, "Error: Cannot open output file %s\n", filename);
-        return;
+/* ─── MIPS Code Generation Helpers ─── */
+
+// Variable tracking for MIPS generation (per-function)
+typedef struct {
+    char name[64];
+    int  offset;        // offset from $fp
+    int  isLocalArray;  // 1 if declared with ARRAY_DECL (data lives on stack)
+    int  isParam;       // 1 if function parameter (could be a pointer if used as array)
+} MIPSGenVar;
+
+static MIPSGenVar mgVars[100];
+static int mgVarCount;
+static int mgNextOffset;
+static int mgTempBase;   // temps start here on the stack
+static int mgFrameSize;
+
+static void mgReset(void) { mgVarCount = 0; mgNextOffset = 0; }
+
+static int mgAddVar(const char* name, int size, int isArr, int isPar) {
+    int off = mgNextOffset;
+    strncpy(mgVars[mgVarCount].name, name, 63);
+    mgVars[mgVarCount].name[63] = '\0';
+    mgVars[mgVarCount].offset = off;
+    mgVars[mgVarCount].isLocalArray = isArr;
+    mgVars[mgVarCount].isParam = isPar;
+    mgVarCount++;
+    mgNextOffset += size;
+    return off;
+}
+
+static int mgFind(const char* name) {
+    for (int i = 0; i < mgVarCount; i++)
+        if (strcmp(mgVars[i].name, name) == 0) return i;
+    return -1;
+}
+
+// Check if string is a temp variable like "tN"
+static int mgIsTemp(const char* s) {
+    if (!s || s[0] != 't' || s[1] == '\0') return 0;
+    for (int i = 1; s[i]; i++) if (!isdigit(s[i])) return 0;
+    return 1;
+}
+static int mgTempNum(const char* s) { return atoi(s + 1); }
+
+// Check if string is a numeric constant
+static int mgIsConst(const char* s) {
+    if (!s || *s == '\0') return 0;
+    char* end; strtod(s, &end);
+    return *end == '\0';
+}
+static int mgConstInt(const char* s) { return (int)atof(s); }
+
+// Emit: load a TAC operand into a MIPS register
+static void mgLoad(FILE* f, const char* op, const char* reg) {
+    if (mgIsTemp(op)) {
+        fprintf(f, "    lw %s, %d($fp)\n", reg, mgTempBase + mgTempNum(op) * 4);
+    } else if (mgIsConst(op)) {
+        fprintf(f, "    li %s, %d\n", reg, mgConstInt(op));
+    } else {
+        int idx = mgFind(op);
+        if (idx >= 0) fprintf(f, "    lw %s, %d($fp)\n", reg, mgVars[idx].offset);
     }
-    
-    MIPSList mipsList;
-    mipsList.head = NULL;
-    mipsList.tail = NULL;
-    
-    // Write MIPS header
-    fprintf(output, ".data\n\n");
-    fprintf(output, ".text\n");
-    fprintf(output, ".globl main\n\n");
-    
-    // Generate main function
-    appendMIPS(&mipsList, createMIPS(MIPS_LABEL, NULL, "main", NULL, NULL));
-    
-    // Find the first non-main function call in the TAC and its arguments
+}
+
+// Emit: store a MIPS register to a TAC destination
+static void mgStore(FILE* f, const char* dst, const char* reg) {
+    if (mgIsTemp(dst)) {
+        fprintf(f, "    sw %s, %d($fp)\n", reg, mgTempBase + mgTempNum(dst) * 4);
+    } else {
+        int idx = mgFind(dst);
+        if (idx >= 0) fprintf(f, "    sw %s, %d($fp)\n", reg, mgVars[idx].offset);
+    }
+}
+
+/* ─── Main MIPS Code Generator ─── */
+void generateMIPSFromOptimizedTAC2(const char* filename) {
+    FILE* out = fopen(filename, "w");
+    if (!out) { fprintf(stderr, "Error: Cannot open output file %s\n", filename); return; }
+
+    fprintf(out, ".data\n\n");
+    fprintf(out, ".text\n");
+    fprintf(out, ".globl main\n\n");
+
     TACInstr* curr = optimizedList.head;
-    char* firstFunctionName = NULL;
-    char* arg0 = NULL;
-    char* arg1 = NULL;
-    TACInstr* argInstr0 = NULL;
-    TACInstr* argInstr1 = NULL;
+    int inMain = 0;
+
+    // Argument collector for function calls
+    char* callArgs[10];
+    int callArgCount = 0;
 
     while (curr) {
-        if (curr->op == TAC_FUNC_CALL && curr->arg1) {
-            firstFunctionName = curr->arg1;
-            // Scan from head to curr to find the two most recent ARG instructions
-            TACInstr* scan = optimizedList.head;
-            TACInstr* lastArg1 = NULL;
-            TACInstr* lastArg0 = NULL;
-            while (scan != curr) {
-                if (scan->op == TAC_ARG) {
-                    lastArg0 = lastArg1;
-                    lastArg1 = scan;
+        /* ── FUNC_DEF: set up a new function ── */
+        if (curr->op == TAC_FUNC_DEF) {
+            // If we just finished main without RETURN, emit exit
+            if (inMain) {
+                fprintf(out, "    li $v0, 10\n");
+                fprintf(out, "    syscall\n");
+            }
+
+            char* fn = curr->arg1;
+            inMain = (strcmp(fn, "main") == 0);
+            mgReset();
+            callArgCount = 0;
+
+            /* Pre-scan: find max temp, count params, collect array decl info */
+            TACInstr* scan = curr->next;
+            int maxTemp = -1, pCount = 0;
+            char* arrNames[20]; int arrCount = 0;
+
+            while (scan && scan->op != TAC_FUNC_DEF) {
+                if (scan->op == TAC_PARAM) pCount++;
+                if (scan->op == TAC_ARRAY_DECL && scan->arg1)
+                    arrNames[arrCount++] = scan->arg1;
+                const char* flds[] = { scan->arg1, scan->arg2, scan->result };
+                for (int f = 0; f < 3; f++)
+                    if (flds[f] && mgIsTemp(flds[f])) {
+                        int t = mgTempNum(flds[f]);
+                        if (t > maxTemp) maxTemp = t;
+                    }
+                scan = scan->next;
+            }
+
+            // Look up array sizes from the symbol table
+            int arrSizes[20];
+            enterFunction(fn);
+            for (int i = 0; i < arrCount; i++) {
+                arrSizes[i] = getArraySize(arrNames[i]);
+                if (arrSizes[i] <= 0) arrSizes[i] = 10;
+            }
+            exitFunction();
+
+            // Build variable map: PARAMs first, then ARRAY_DECLs, then DECLs
+            scan = curr->next;
+            while (scan && scan->op != TAC_FUNC_DEF) {
+                if (scan->op == TAC_PARAM) mgAddVar(scan->arg1, 4, 0, 1);
+                scan = scan->next;
+            }
+            scan = curr->next;
+            while (scan && scan->op != TAC_FUNC_DEF) {
+                if (scan->op == TAC_ARRAY_DECL) {
+                    for (int i = 0; i < arrCount; i++)
+                        if (strcmp(arrNames[i], scan->arg1) == 0) {
+                            mgAddVar(scan->arg1, arrSizes[i] * 4, 1, 0);
+                            break;
+                        }
                 }
                 scan = scan->next;
             }
-            argInstr0 = lastArg0;
-            argInstr1 = lastArg1;
-            if (argInstr0) arg0 = argInstr0->arg1;
-            if (argInstr1) arg1 = argInstr1->arg1;
+            scan = curr->next;
+            while (scan && scan->op != TAC_FUNC_DEF) {
+                if (scan->op == TAC_DECL) mgAddVar(scan->result, 4, 0, 0);
+                scan = scan->next;
+            }
+
+            mgTempBase = mgNextOffset;
+            int nTemps = (maxTemp >= 0) ? (maxTemp + 1) : 0;
+            mgFrameSize = mgNextOffset + nTemps * 4 + 8;
+            if (mgFrameSize % 8) mgFrameSize += 8 - (mgFrameSize % 8);
+
+            // Emit prologue
+            fprintf(out, "%s:\n", fn);
+            fprintf(out, "    subu $sp, $sp, %d\n", mgFrameSize);
+            fprintf(out, "    sw $ra, %d($sp)\n", mgFrameSize - 4);
+            fprintf(out, "    sw $fp, %d($sp)\n", mgFrameSize - 8);
+            fprintf(out, "    move $fp, $sp\n");
+
+            // Store incoming params ($a0..$a3) onto the stack
+            for (int i = 0; i < pCount && i < 4; i++)
+                fprintf(out, "    sw $a%d, %d($fp)\n", i, mgVars[i].offset);
+
+            curr = curr->next;
+            continue;
+        }
+
+        /* ── Process each TAC instruction ── */
+        switch (curr->op) {
+        case TAC_PARAM: case TAC_DECL: case TAC_ARRAY_DECL:
+        case TAC_BOUNDS_CHECK: case TAC_DIV_CHECK:
+            break; // handled during pre-scan or skipped
+
+        case TAC_ASSIGN:
+            mgLoad(out, curr->arg1, "$t0");
+            mgStore(out, curr->result, "$t0");
+            break;
+
+        case TAC_ADD:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    add $t2, $t0, $t1\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
+        case TAC_SUBTRACT:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    sub $t2, $t0, $t1\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
+        case TAC_MULTIPLY:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    mult $t0, $t1\n");
+            fprintf(out, "    mflo $t2\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
+        case TAC_DIVIDE:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    div $t0, $t1\n");
+            fprintf(out, "    mflo $t2\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
+        case TAC_ARRAY_WRITE: {
+            // arg1=array, arg2=index, result=value
+            int vi = mgFind(curr->arg1);
+            if (vi < 0) break;
+            mgLoad(out, curr->result, "$t0");  // value
+            if (mgVars[vi].isLocalArray) {
+                if (mgIsConst(curr->arg2)) {
+                    fprintf(out, "    sw $t0, %d($fp)\n",
+                            mgVars[vi].offset + mgConstInt(curr->arg2) * 4);
+                } else {
+                    mgLoad(out, curr->arg2, "$t1");
+                    fprintf(out, "    sll $t1, $t1, 2\n");
+                    fprintf(out, "    addi $t2, $fp, %d\n", mgVars[vi].offset);
+                    fprintf(out, "    add $t2, $t2, $t1\n");
+                    fprintf(out, "    sw $t0, 0($t2)\n");
+                }
+            } else if (mgVars[vi].isParam) {
+                fprintf(out, "    lw $t3, %d($fp)\n", mgVars[vi].offset);
+                if (mgIsConst(curr->arg2))
+                    fprintf(out, "    sw $t0, %d($t3)\n", mgConstInt(curr->arg2) * 4);
+                else {
+                    mgLoad(out, curr->arg2, "$t1");
+                    fprintf(out, "    sll $t1, $t1, 2\n");
+                    fprintf(out, "    add $t3, $t3, $t1\n");
+                    fprintf(out, "    sw $t0, 0($t3)\n");
+                }
+            }
             break;
         }
+
+        case TAC_ARRAY_READ: {
+            // arg1=array, arg2=index, result=dest
+            int vi = mgFind(curr->arg1);
+            if (vi < 0) break;
+            if (mgVars[vi].isLocalArray) {
+                if (mgIsConst(curr->arg2)) {
+                    fprintf(out, "    lw $t0, %d($fp)\n",
+                            mgVars[vi].offset + mgConstInt(curr->arg2) * 4);
+                } else {
+                    mgLoad(out, curr->arg2, "$t1");
+                    fprintf(out, "    sll $t1, $t1, 2\n");
+                    fprintf(out, "    addi $t2, $fp, %d\n", mgVars[vi].offset);
+                    fprintf(out, "    add $t2, $t2, $t1\n");
+                    fprintf(out, "    lw $t0, 0($t2)\n");
+                }
+            } else if (mgVars[vi].isParam) {
+                fprintf(out, "    lw $t3, %d($fp)\n", mgVars[vi].offset);
+                if (mgIsConst(curr->arg2))
+                    fprintf(out, "    lw $t0, %d($t3)\n", mgConstInt(curr->arg2) * 4);
+                else {
+                    mgLoad(out, curr->arg2, "$t1");
+                    fprintf(out, "    sll $t1, $t1, 2\n");
+                    fprintf(out, "    add $t3, $t3, $t1\n");
+                    fprintf(out, "    lw $t0, 0($t3)\n");
+                }
+            }
+            mgStore(out, curr->result, "$t0");
+            break;
+        }
+
+        case TAC_PRINT:
+            mgLoad(out, curr->arg1, "$a0");
+            fprintf(out, "    li $v0, 1\n");
+            fprintf(out, "    syscall\n");
+            fprintf(out, "    li $a0, 10\n");
+            fprintf(out, "    li $v0, 11\n");
+            fprintf(out, "    syscall\n");
+            break;
+
+        case TAC_ARG:
+            if (callArgCount < 10)
+                callArgs[callArgCount++] = curr->arg1;
+            break;
+
+        case TAC_FUNC_CALL: {
+            // Load args in reverse order → $a0, $a1, …
+            for (int i = 0; i < callArgCount && i < 4; i++) {
+                char* a = callArgs[callArgCount - 1 - i];
+                if (mgIsTemp(a)) {
+                    fprintf(out, "    lw $a%d, %d($fp)\n", i,
+                            mgTempBase + mgTempNum(a) * 4);
+                } else if (mgIsConst(a)) {
+                    fprintf(out, "    li $a%d, %d\n", i, mgConstInt(a));
+                } else {
+                    int vi = mgFind(a);
+                    if (vi >= 0) {
+                        if (mgVars[vi].isLocalArray)
+                            fprintf(out, "    addi $a%d, $fp, %d\n", i,
+                                    mgVars[vi].offset);
+                        else
+                            fprintf(out, "    lw $a%d, %d($fp)\n", i,
+                                    mgVars[vi].offset);
+                    }
+                }
+            }
+            fprintf(out, "    jal %s\n", curr->arg1);
+            if (curr->result) mgStore(out, curr->result, "$v0");
+            callArgCount = 0;
+            break;
+        }
+
+        case TAC_RETURN:
+            if (curr->arg1) mgLoad(out, curr->arg1, "$v0");
+            if (inMain) {
+                fprintf(out, "    li $v0, 10\n");
+                fprintf(out, "    syscall\n");
+            } else {
+                fprintf(out, "    lw $ra, %d($sp)\n", mgFrameSize - 4);
+                fprintf(out, "    lw $fp, %d($sp)\n", mgFrameSize - 8);
+                fprintf(out, "    addu $sp, $sp, %d\n", mgFrameSize);
+                fprintf(out, "    jr $ra\n");
+            }
+            break;
+
+        default: break;
+        }
+
         curr = curr->next;
     }
 
-    if (firstFunctionName) {
-        // Ensure arguments are stored to stack if they are variables or temporaries
-        if (arg0) {
-            if ((isdigit(arg0[0])) || (arg0[0] == '-' && isdigit(arg0[1]))) {
-                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", arg0, NULL, NULL));
-            } else if (isTemporary(arg0)) {
-                appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", tempToReg(arg0), NULL, NULL));
-            } else {
-                int offset = getOptimizerVarOffset(arg0);
-                if (offset != -1) {
-                    char offsetStr[32];
-                    sprintf(offsetStr, "%d($fp)", offset);
-                    appendMIPS(&mipsList, createMIPS(MIPS_LW, "$a0", offsetStr, NULL, NULL));
-                }
-            }
-        }
-        if (arg1) {
-            if ((isdigit(arg1[0])) || (arg1[0] == '-' && isdigit(arg1[1]))) {
-                appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a1", arg1, NULL, NULL));
-            } else if (isTemporary(arg1)) {
-                appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a1", tempToReg(arg1), NULL, NULL));
-            } else {
-                int offset = getOptimizerVarOffset(arg1);
-                if (offset != -1) {
-                    char offsetStr[32];
-                    sprintf(offsetStr, "%d($fp)", offset);
-                    appendMIPS(&mipsList, createMIPS(MIPS_LW, "$a1", offsetStr, NULL, NULL));
-                }
-            }
-        }
-        appendMIPS(&mipsList, createMIPS(MIPS_JAL, NULL, firstFunctionName, NULL, NULL));
+    // If main ended without explicit RETURN, emit exit
+    if (inMain) {
+        fprintf(out, "    li $v0, 10\n");
+        fprintf(out, "    syscall\n");
+    }
 
-        // After function call, move $v0 to the temporary that stores the result (e.g., t2)
-        // Find the TAC_FUNC_CALL instruction to get the result temp
-        curr = optimizedList.head;
-        while (curr) {
-            if (curr->op == TAC_FUNC_CALL && curr->arg1 && strcmp(curr->arg1, firstFunctionName) == 0 && curr->result) {
-                if (isTemporary(curr->result)) {
-                    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, tempToReg(curr->result), "$v0", NULL, NULL));
-                }
-                break;
-            }
-            curr = curr->next;
-        }
-    }
-    
-    // Print the result (in $v0)
-    appendMIPS(&mipsList, createMIPS(MIPS_MOVE, "$a0", "$v0", NULL, NULL));
-    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "1", NULL, NULL));
-    appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
-    
-    // Print newline
-    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "11", NULL, NULL));
-    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$a0", "10", NULL, NULL));
-    appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
-    
-    // Exit program
-    appendMIPS(&mipsList, createMIPS(MIPS_LI, "$v0", "10", NULL, NULL));
-    appendMIPS(&mipsList, createMIPS(MIPS_SYSCALL, NULL, NULL, NULL, NULL));
-    
-    // Generate function definitions (skip main)
-    curr = optimizedList.head;
-    while (curr) {
-        if (curr->op == TAC_FUNC_DEF && curr->arg1 && strcmp(curr->arg1, "main") != 0) {
-            // Generate function label
-            appendMIPS(&mipsList, createMIPS(MIPS_LABEL, NULL, curr->arg1, NULL, NULL));
-            
-            // Look ahead for the operation in this function
-            TACInstr* funcInstr = curr->next;
-            while (funcInstr && funcInstr->op != TAC_FUNC_DEF) {
-                if (funcInstr->op == TAC_ADD) {
-                    // Generate: add $v0, $a0, $a1
-                    appendMIPS(&mipsList, createMIPS(MIPS_ADD, "$v0", "$a0", "$a1", NULL));
-                } else if (funcInstr->op == TAC_MULTIPLY) {
-                    // Generate: mult $a0, $a1; mflo $v0
-                    appendMIPS(&mipsList, createMIPS(MIPS_MUL, NULL, "$a0", "$a1", NULL));
-                    appendMIPS(&mipsList, createMIPS(MIPS_MFLO, "$v0", NULL, NULL, NULL));
-                } else if (funcInstr->op == TAC_DIVIDE) {
-                    // Generate: div $a0, $a1; mflo $v0
-                    appendMIPS(&mipsList, createMIPS(MIPS_DIV, NULL, "$a0", "$a1", NULL));
-                    appendMIPS(&mipsList, createMIPS(MIPS_MFLO, "$v0", NULL, NULL, NULL));
-                } else if (funcInstr->op == TAC_SUBTRACT) {
-                    // Generate: sub $v0, $a0, $a1
-                    appendMIPS(&mipsList, createMIPS(MIPS_SUB, "$v0", "$a0", "$a1", NULL));
-                } else if (funcInstr->op == TAC_RETURN) {
-                    // Generate: jr $ra
-                    appendMIPS(&mipsList, createMIPS(MIPS_JR, NULL, "$ra", NULL, NULL));
-                    break; // End of function
-                }
-                funcInstr = funcInstr->next;
-            }
-        }
-        curr = curr->next;
-    }
-    
-    // Print MIPS instructions to file
-    printMIPS(&mipsList, output);
-    
-    // Cleanup
-    freeMIPSList(&mipsList);
-    fclose(output);
+    fclose(out);
 }
 
 // Print optimized TAC instructions
-void printOptimizedTAC() {
+void printOptimizedTAC2() {
     printf("Optimized TAC Instructions:\n");
     printf("─────────────────────────────\n");
     
@@ -448,6 +630,21 @@ void printOptimizedTAC() {
             case TAC_ARG:
                 printf("%2d: ARG %s            // Function argument\n", instrNum++, curr->arg1);
                 break;
+            case TAC_ARRAY_DECL:
+                printf("%2d: ARRAY_DECL %s     // Array declaration\n", instrNum++, curr->arg1);
+                break;
+            case TAC_ARRAY_WRITE:
+                printf("%2d: ARRAY_WRITE %s[%s] = %s  // Array assignment\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ARRAY_READ:
+                printf("%2d: ARRAY_READ %s[%s] -> %s  // Array access\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_BOUNDS_CHECK:
+                printf("%2d: BOUNDS_CHECK %s[%s] < %s // Runtime bounds check\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_DIV_CHECK:
+                printf("%2d: DIV_CHECK %s != 0        // Runtime divide-by-zero check\n", instrNum++, curr->arg1);
+                break;
         }
         curr = curr->next;
     }
@@ -455,7 +652,7 @@ void printOptimizedTAC() {
 }
 
 // Print optimized TAC to file
-void printOptimizedTACToFile(const char* filename) {
+void printOptimizedTACToFile2(const char* filename) {
     FILE* file = fopen(filename, "w");
     if (!file) {
         fprintf(stderr, "Error: Cannot open file %s for writing\n", filename);
@@ -509,6 +706,98 @@ void printOptimizedTACToFile(const char* filename) {
                 break;
             case TAC_ARG:
                 fprintf(file, "%2d: ARG %s            // Function argument\n", instrNum++, curr->arg1);
+                break;
+            case TAC_ARRAY_DECL:
+                fprintf(file, "%2d: ARRAY_DECL %s     // Array declaration\n", instrNum++, curr->arg1);
+                break;
+            case TAC_ARRAY_WRITE:
+                fprintf(file, "%2d: ARRAY_WRITE %s[%s] = %s  // Array assignment\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ARRAY_READ:
+                fprintf(file, "%2d: ARRAY_READ %s[%s] -> %s  // Array access\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_BOUNDS_CHECK:
+                fprintf(file, "%2d: BOUNDS_CHECK %s[%s] < %s // Runtime bounds check\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_DIV_CHECK:
+                fprintf(file, "%2d: DIV_CHECK %s != 0        // Runtime divide-by-zero check\n", instrNum++, curr->arg1);
+                break;
+        }
+        curr = curr->next;
+    }
+    
+    fclose(file);
+}
+
+// Print unoptimized TAC to file (with actual variable names)
+void printTACToFile2(const char* filename) {
+    FILE* file = fopen(filename, "w");
+    if (!file) {
+        fprintf(stderr, "Error: Cannot open file %s for writing\n", filename);
+        return;
+    }
+    
+    fprintf(file, "Unoptimized TAC Instructions:\n");
+    fprintf(file, "─────────────────────────────\n");
+    
+    TACInstr* curr = tacList.head;
+    int instrNum = 1;
+    
+    while (curr) {
+        switch(curr->op) {
+            case TAC_ADD:
+                fprintf(file, "%2d: %s = %s + %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_SUBTRACT:
+                fprintf(file, "%2d: %s = %s - %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_MULTIPLY:
+                fprintf(file, "%2d: %s = %s * %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_DIVIDE:
+                fprintf(file, "%2d: %s = %s / %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_ASSIGN:
+                fprintf(file, "%2d: %s = %s\n", instrNum++, curr->result, curr->arg1);
+                break;
+            case TAC_PRINT:
+                fprintf(file, "%2d: PRINT %s\n", instrNum++, curr->arg1);
+                break;
+            case TAC_DECL:
+                fprintf(file, "%2d: DECL %s\n", instrNum++, curr->result);
+                break;
+            case TAC_FUNC_DEF:
+                fprintf(file, "%2d: FUNC %s\n", instrNum++, curr->arg1);
+                break;
+            case TAC_FUNC_CALL:
+                fprintf(file, "%2d: %s = CALL %s\n", instrNum++, curr->result, curr->arg1);
+                break;
+            case TAC_PARAM:
+                fprintf(file, "%2d: PARAM %s\n", instrNum++, curr->arg1);
+                break;
+            case TAC_RETURN:
+                if (curr->arg1)
+                    fprintf(file, "%2d: RETURN %s\n", instrNum++, curr->arg1);
+                else
+                    fprintf(file, "%2d: RETURN\n", instrNum++);
+                break;
+            case TAC_ARG:
+                fprintf(file, "%2d: ARG %s\n", instrNum++, curr->arg1);
+                break;
+            case TAC_ARRAY_DECL:
+                fprintf(file, "%2d: ARRAY_DECL %s\n", instrNum++, curr->arg1);
+                break;
+            case TAC_ARRAY_WRITE:
+                fprintf(file, "%2d: ARRAY_WRITE %s[%s] = %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ARRAY_READ:
+                fprintf(file, "%2d: ARRAY_READ %s[%s] -> %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_BOUNDS_CHECK:
+                fprintf(file, "%2d: BOUNDS_CHECK %s[%s] < %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_DIV_CHECK:
+                fprintf(file, "%2d: DIV_CHECK %s != 0\n", instrNum++, curr->arg1);
                 break;
         }
         curr = curr->next;

@@ -63,5 +63,5 @@ void main() {
     print(val3);
 
     val4 = sumArrayTwo(nums, 2);
-    print(val4);
+    print(val4 +2);
 }
