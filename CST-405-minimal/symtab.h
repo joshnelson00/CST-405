@@ -9,6 +9,9 @@
 /* Forward declaration for ASTNode */
 typedef struct ASTNode ASTNode;
 
+/* Global error counter for semantic errors detected during compilation */
+extern int semantic_error_count;
+
 #define MAX_VARS 100  /* Maximum number of variables supported */
 #define MAX_FUNCS 50  /* Maximum number of functions supported */
 #define HASH_SIZE 211 /* Prime number for better hash distribution */
@@ -72,4 +75,5 @@ int addArrayVar(char* name, VarType type, int size); /* Add array variable */
 int isArrayVar(char* name); /* Check if variable is an array */
 int getArraySize(char* name); /* Get size of array variable */
 int validateFunctionCall(char* func_name, int arg_count); /* Validate function call argument count */
+void addParamsToScope(ASTNode* params); /* Add function parameters to current scope */
 #endif

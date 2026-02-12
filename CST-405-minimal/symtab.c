@@ -8,6 +8,9 @@
 GlobalSymbolTable globalSymTab;
 SymbolTable* currentSymTab = NULL;  // current active scope
 
+/* Global error counter for semantic errors */
+int semantic_error_count = 0;
+
 extern int yyline;
 
 /* DJB2 Hash Function - O(1) lookup optimization */
@@ -52,12 +55,18 @@ int addVar(char* name, VarType type) {
 
     if (isVarDeclared(name)) {
         fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
-        fprintf(stderr, "   Variable '%s' already declared\n", name);
+        fprintf(stderr, "   Variable '%s' is already declared in this scope\n", name);
+        fprintf(stderr, "💡 Suggestions:\n");
+        fprintf(stderr, "   • Remove the duplicate declaration if it was unintentional\n");
+        fprintf(stderr, "   • Use a different name (e.g., '%s2' or '%s_alt')\n", name, name);
+        fprintf(stderr, "   • If you intended to reassign, just use: %s = <value>;\n\n", name);
+        semantic_error_count++;
         return -1;
     }
 
     if (currentSymTab->count >= MAX_VARS) {
         fprintf(stderr, "❌ Error: Symbol table full (max %d variables)\n", MAX_VARS);
+        semantic_error_count++;
         return -1;
     }
 
@@ -89,17 +98,32 @@ int addVar(char* name, VarType type) {
 int addArray(char* name, VarType type, int size) {
     if (!currentSymTab) {
         fprintf(stderr, "❌ Error: No active symbol table\n");
+        semantic_error_count++;
+        return -1;
+    }
+
+    if (size <= 0) {
+        fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Array '%s' cannot have %s size (%d)\n", name,
+                size < 0 ? "negative" : "zero", size);
+        fprintf(stderr, "💡 Suggestion: Array size must be a positive integer\n\n");
+        semantic_error_count++;
         return -1;
     }
 
     if (isVarDeclared(name)) {
         fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
-        fprintf(stderr, "   Variable '%s' already declared\n", name);
+        fprintf(stderr, "   Array '%s' is already declared in this scope\n", name);
+        fprintf(stderr, "💡 Suggestions:\n");
+        fprintf(stderr, "   • Remove the duplicate declaration\n");
+        fprintf(stderr, "   • Use a different name (e.g., '%s2')\n\n", name);
+        semantic_error_count++;
         return -1;
     }
 
     if (currentSymTab->count >= MAX_VARS) {
         fprintf(stderr, "❌ Error: Symbol table full (max %d variables)\n", MAX_VARS);
+        semantic_error_count++;
         return -1;
     }
 
@@ -131,6 +155,17 @@ int addParam(char* name, VarType type) {
     return addVar(name, type);  // same as variable but can track param_count later
 }
 
+/* Recursively count parameters in a nested param list AST */
+static int countParams(ASTNode* node) {
+    if (!node) return 0;
+    if (node->type == NODE_PARAM) return 1;
+    if (node->type == NODE_PARAM_LIST) {
+        return countParams(node->data.param_list.param) + 
+               countParams(node->data.param_list.next);
+    }
+    return 0;
+}
+
 /* Add function to global table */
 int addFunction(char* name, VarType return_type, ASTNode* ast_node) {
     // Check if function was already prepared (via prepareFunctionScope)
@@ -139,21 +174,10 @@ int addFunction(char* name, VarType return_type, ASTNode* ast_node) {
             // Function exists, just update AST and count parameters
             globalSymTab.funcs[i].ast_node = ast_node;
             
-            // Count parameters from AST
+            // Count parameters from AST using recursive traversal
             int param_count = 0;
             if (ast_node && ast_node->data.func.params) {
-                ASTNode* param_list = ast_node->data.func.params;
-                while (param_list) {
-                    if (param_list->type == NODE_PARAM) {
-                        param_count++;
-                        break;
-                    } else if (param_list->type == NODE_PARAM_LIST) {
-                        param_count++;
-                        param_list = param_list->data.param_list.next;
-                    } else {
-                        break;
-                    }
-                }
+                param_count = countParams(ast_node->data.func.params);
             }
             globalSymTab.funcs[i].param_count = param_count;
             
@@ -173,21 +197,10 @@ int addFunction(char* name, VarType return_type, ASTNode* ast_node) {
     func->name = strdup(name);
     func->return_type = return_type;
     
-    // Count parameters from AST
+    // Count parameters from AST using recursive traversal
     int param_count = 0;
     if (ast_node && ast_node->data.func.params) {
-        ASTNode* param_list = ast_node->data.func.params;
-        while (param_list) {
-            if (param_list->type == NODE_PARAM) {
-                param_count++;
-                break;
-            } else if (param_list->type == NODE_PARAM_LIST) {
-                param_count++;
-                param_list = param_list->data.param_list.next;
-            } else {
-                break;
-            }
-        }
+        param_count = countParams(ast_node->data.func.params);
     }
     func->param_count = param_count;
     
@@ -213,7 +226,15 @@ int addFunction(char* name, VarType return_type, ASTNode* ast_node) {
 void prepareFunctionScope(char* name, VarType return_type) {
     if (isFunctionDeclared(name)) {
         fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
-        fprintf(stderr, "   Function '%s' already declared\n", name);
+        fprintf(stderr, "   Function '%s' is already defined\n", name);
+        fprintf(stderr, "💡 Suggestions:\n");
+        fprintf(stderr, "   • Remove the duplicate function definition\n");
+        fprintf(stderr, "   • Rename the function (e.g., '%s2' or '%s_v2')\n", name, name);
+        fprintf(stderr, "   • If you intended to overload, this language does not support function overloading\n\n");
+        semantic_error_count++;
+        /* Enter the existing function's scope for error recovery */
+        /* This allows the parser to continue processing the duplicate body */
+        enterFunction(name);
         return;
     }
 
@@ -351,6 +372,9 @@ int isFunctionDeclared(char* name) {
 
 /* Validate function call argument count */
 int validateFunctionCall(char* func_name, int arg_count) {
+    /* Skip validation for built-in functions */
+    if (strcmp(func_name, "print") == 0) return 1;
+
     for (int i = 0; i < globalSymTab.func_count; i++) {
         if (strcmp(globalSymTab.funcs[i].name, func_name) == 0) {
             if (globalSymTab.funcs[i].param_count != arg_count) {
@@ -360,13 +384,39 @@ int validateFunctionCall(char* func_name, int arg_count) {
                        globalSymTab.funcs[i].param_count,
                        globalSymTab.funcs[i].param_count == 1 ? "" : "s",
                        arg_count);
+                fprintf(stderr, "💡 Suggestions:\n");
+                if (arg_count < globalSymTab.funcs[i].param_count) {
+                    fprintf(stderr, "   • Add %d more argument%s to the function call\n",
+                            globalSymTab.funcs[i].param_count - arg_count,
+                            (globalSymTab.funcs[i].param_count - arg_count) == 1 ? "" : "s");
+                } else {
+                    fprintf(stderr, "   • Remove %d argument%s from the function call\n",
+                            arg_count - globalSymTab.funcs[i].param_count,
+                            (arg_count - globalSymTab.funcs[i].param_count) == 1 ? "" : "s");
+                }
+                fprintf(stderr, "   • Check the function definition for the correct signature\n\n");
+                semantic_error_count++;
                 return 0;  // Validation failed
             }
             return 1;  // Validation passed
         }
     }
-    fprintf(stderr, "\n❌ Semantic Error at line %d: Function '%s' not declared\n", 
-            yyline, func_name);
+    /* Function not found - check for similar names */
+    fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+    fprintf(stderr, "   Function '%s' is not declared\n", func_name);
+    fprintf(stderr, "💡 Suggestions:\n");
+    fprintf(stderr, "   • Check for typos in the function name\n");
+    fprintf(stderr, "   • Make sure the function is defined before it is called\n");
+    if (globalSymTab.func_count > 0) {
+        fprintf(stderr, "   • Available functions: ");
+        for (int i = 0; i < globalSymTab.func_count; i++) {
+            fprintf(stderr, "%s%s", globalSymTab.funcs[i].name,
+                    i < globalSymTab.func_count - 1 ? ", " : "");
+        }
+        fprintf(stderr, "\n");
+    }
+    fprintf(stderr, "\n");
+    semantic_error_count++;
     return 0;
 }
 
@@ -415,17 +465,45 @@ void printGlobalSymTab() {
 int addArrayVar(char* name, VarType type, int size) {
     if (!currentSymTab) {
         fprintf(stderr, "❌ Error: No active symbol table\n");
+        semantic_error_count++;
+        return -1;
+    }
+
+    if (size < 0) {
+        fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Array '%s' cannot have negative size (%d)\n", name, size);
+        fprintf(stderr, "💡 Suggestions:\n");
+        fprintf(stderr, "   • Array size must be a positive integer\n");
+        fprintf(stderr, "   • Example: %s %s[%d];\n\n",
+                type == TYPE_FLOAT ? "float" : "int", name, -size);
+        semantic_error_count++;
+        return -1;
+    }
+
+    if (size == 0) {
+        fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Array '%s' cannot have zero size\n", name);
+        fprintf(stderr, "💡 Suggestions:\n");
+        fprintf(stderr, "   • Array size must be at least 1\n");
+        fprintf(stderr, "   • Example: %s %s[10];\n\n",
+                type == TYPE_FLOAT ? "float" : "int", name);
+        semantic_error_count++;
         return -1;
     }
 
     if (isVarDeclared(name)) {
         fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
-        fprintf(stderr, "   Variable '%s' already declared\n", name);
+        fprintf(stderr, "   Array '%s' is already declared in this scope\n", name);
+        fprintf(stderr, "💡 Suggestions:\n");
+        fprintf(stderr, "   • Remove the duplicate declaration if it was unintentional\n");
+        fprintf(stderr, "   • Use a different name (e.g., '%s2' or '%s_alt')\n\n", name, name);
+        semantic_error_count++;
         return -1;
     }
 
     if (currentSymTab->count >= MAX_VARS) {
         fprintf(stderr, "❌ Error: Symbol table full (max %d variables)\n", MAX_VARS);
+        semantic_error_count++;
         return -1;
     }
 
@@ -466,4 +544,24 @@ int isArrayVar(char* name) {
         node = node->next;
     }
     return 0;
+}
+
+/* Add function parameters to the current scope's symbol table
+ * This is called after prepareFunctionScope() to register params
+ * so that undeclared variable checks work correctly within function bodies.
+ */
+void addParamsToScope(ASTNode* node) {
+    if (!node) return;
+    if (node->type == NODE_PARAM) {
+        if (node->data.param.is_array) {
+            /* Array parameters have unknown size at compile time.
+             * Use a large placeholder size to avoid false bounds warnings. */
+            addArrayVar(node->data.param.name, node->data.param.type, 9999);
+        } else {
+            addVar(node->data.param.name, node->data.param.type);
+        }
+    } else if (node->type == NODE_PARAM_LIST) {
+        addParamsToScope(node->data.param_list.param);
+        addParamsToScope(node->data.param_list.next);
+    }
 }
