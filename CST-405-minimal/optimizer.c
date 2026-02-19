@@ -598,12 +598,9 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
                     fprintf(out, "    syscall\n");
                 }
             } else {
-                // Regular integer/variable print
+                // Regular integer/variable print (no automatic newline)
                 mgLoad(out, curr->arg1, "$a0");
                 fprintf(out, "    li $v0, 1\n");
-                fprintf(out, "    syscall\n");
-                fprintf(out, "    li $a0, 10\n");
-                fprintf(out, "    li $v0, 11\n");
                 fprintf(out, "    syscall\n");
             }
             break;
