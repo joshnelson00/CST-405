@@ -20,6 +20,8 @@ extern TACList optimizedList;
 extern int yyparse();
 extern FILE* yyin;
 extern ASTNode* root;
+extern int syntax_error_count;
+extern int semantic_error_count;
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
@@ -70,8 +72,10 @@ int main(int argc, char* argv[]) {
     end_benchmark(bench_parse, "Phase 1: Lexical & Syntax Analysis");
     free(bench_parse);
     
-    if (parse_result == 0) {
-        printf("✓ Parse successful - program is syntactically correct!\n\n");
+    int total_errors = syntax_error_count + semantic_error_count;
+    
+    if (parse_result == 0 && total_errors == 0) {
+        printf("✓ Parse successful - program is syntactically and semantically correct!\n\n");
         
         /* PHASE 2: AST Display */
         printf("┌──────────────────────────────────────────────────────────┐\n");
@@ -148,26 +152,31 @@ int main(int argc, char* argv[]) {
         printf("║         Run the output file in a MIPS simulator            ║\n");
         printf("╚════════════════════════════════════════════════════════════╝\n");
     } else {
-        printf("\n❌ Compilation Failed!\n");
-        printf("┌──────────────────────────────────────────────────┐\n");
-        printf("│                  ERROR SUMMARY                   │\n");
-        printf("├──────────────────────────────────────────────────┤\n");
-        printf("│ Your code has syntax or semantic errors          │\n");
-        printf("│ Check the messages above for details             │\n");
-        printf("│                                                  │\n");
-        printf("│ 💡 Most Common Errors:                           │\n");
-        printf("│   • Missing semicolon ';'                        │\n");
-        printf("│   • Undeclared variables                         │\n");
-        printf("│   • Invalid print syntax                         │\n");
-        printf("│   • Type mismatches                              │\n");
-        printf("│   • Unmatched parentheses                        │\n");
-        printf("└──────────────────────────────────────────────────┘\n");
-        printf("\n🔧 Quick fixes to try:\n");
-        printf("   1. Add semicolons after each statement\n");
-        printf("   2. Declare all variables before use\n");
-        printf("   3. Use print(expression) with semicolon\n");
-        printf("   4. Check parentheses matching\n");
-        printf("   5. Verify variable names are spelled correctly\n");
+        printf("\n");
+        printf("╔══════════════════════════════════════════════════════════════╗\n");
+        printf("║                   ❌ COMPILATION FAILED                      ║\n");
+        printf("╠══════════════════════════════════════════════════════════════╣\n");
+        printf("║                      ERROR SUMMARY                          ║\n");
+        printf("╠══════════════════════════════════════════════════════════════╣\n");
+        if (syntax_error_count > 0)
+            printf("║  Syntax errors:   %3d                                       ║\n", syntax_error_count);
+        if (semantic_error_count > 0)
+            printf("║  Semantic errors:  %3d                                      ║\n", semantic_error_count);
+        printf("║  ─────────────────────                                      ║\n");
+        printf("║  Total errors:    %3d                                       ║\n", total_errors);
+        printf("╠══════════════════════════════════════════════════════════════╣\n");
+        printf("║  Review the detailed error messages above.                  ║\n");
+        printf("║  Each error includes suggestions for how to fix it.        ║\n");
+        printf("╠══════════════════════════════════════════════════════════════╣\n");
+        printf("║  💡 Most Common Fixes:                                      ║\n");
+        printf("║    • Add missing semicolons ';' after statements            ║\n");
+        printf("║    • Declare all variables before use (int x;)              ║\n");
+        printf("║    • Remove duplicate variable/function declarations        ║\n");
+        printf("║    • Use correct number of arguments in function calls      ║\n");
+        printf("║    • Use positive integers for array sizes                  ║\n");
+        printf("║    • Check for unmatched braces '{' '}'                     ║\n");
+        printf("║    • Access arrays with subscript: arr[index]               ║\n");
+        printf("╚══════════════════════════════════════════════════════════════╝\n");
         return 1;
     }
     
