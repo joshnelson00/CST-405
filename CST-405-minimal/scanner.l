@@ -28,8 +28,13 @@ int yycolumn = 1;
 "print"         { yycolumn += yyleng; return PRINT; }
 "return"        { yycolumn += yyleng; return RETURN; }
 "while"         { yycolumn += yyleng; return WHILE; }
-"["             { yycolumn++; return '['; }
-"]"             { yycolumn++; return ']'; }
+
+\"[^\"]*\" {
+    /* String literal with escape sequences */
+    yylval.str = strdup(yytext);
+    yycolumn += yyleng;
+    return STRING;
+}
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
     yylval.str = strdup(yytext);

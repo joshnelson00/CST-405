@@ -30,6 +30,14 @@ typedef struct {
         float value;
         int id;
     }* floatConsts;
+    // String literals dynamic array
+    int stringConstCount;
+    int stringConstIndex;
+    int stringConstCapacity;
+    struct {
+        char* value;
+        int id;
+    }* stringConsts;
 } CodeGenContext;
 
 // Register management functions

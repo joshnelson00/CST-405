@@ -92,6 +92,37 @@ int getFloatConstID(CodeGenContext* ctx, float value) {
     return -1; // Should never happen if collectFloatConsts was called
 }
 
+// String constants management
+int addStringConst(CodeGenContext* ctx, const char* value) {
+    // Check if constant already exists
+    for (int i = 0; i < ctx->stringConstIndex; i++) {
+        if (strcmp(ctx->stringConsts[i].value, value) == 0) {
+            return ctx->stringConsts[i].id;
+        }
+    }
+    
+    // Expand array if needed
+    if (ctx->stringConstIndex >= ctx->stringConstCapacity) {
+        int newCapacity = ctx->stringConstCapacity == 0 ? 16 : ctx->stringConstCapacity * 2;
+        ctx->stringConsts = realloc(ctx->stringConsts, newCapacity * sizeof(ctx->stringConsts[0]));
+        ctx->stringConstCapacity = newCapacity;
+    }
+    
+    // Add new constant
+    ctx->stringConsts[ctx->stringConstIndex].value = strdup(value);
+    ctx->stringConsts[ctx->stringConstIndex].id = ctx->stringConstCount++;
+    return ctx->stringConsts[ctx->stringConstIndex++].id;
+}
+
+int getStringConstID(CodeGenContext* ctx, const char* value) {
+    for (int i = 0; i < ctx->stringConstIndex; i++) {
+        if (strcmp(ctx->stringConsts[i].value, value) == 0) {
+            return ctx->stringConsts[i].id;
+        }
+    }
+    return -1;
+}
+
 // Collect all float constants from AST
 void collectFloatConsts(CodeGenContext* ctx, ASTNode* node) {
     if (!node) return;
@@ -99,6 +130,9 @@ void collectFloatConsts(CodeGenContext* ctx, ASTNode* node) {
     switch(node->type) {
         case NODE_FLT:
             addFloatConst(ctx, node->data.flt);
+            break;
+        case NODE_STR:
+            addStringConst(ctx, node->data.str);
             break;
         case NODE_BINOP:
             collectFloatConsts(ctx, node->data.binop.left);
@@ -178,6 +212,13 @@ ExprResult genExpr(CodeGenContext* ctx, ASTNode* node) {
             res.type = TYPE_FLOAT;
             int id = getFloatConstID(ctx, node->data.flt);
             fprintf(ctx->output, "    l.s $f%d, flt_%d\n", res.reg, id);
+            return res;
+        }
+
+        case NODE_STR: {
+            // String literals return a special marker
+            res.reg = getStringConstID(ctx, node->data.str);
+            res.type = TYPE_INT; // Use TYPE_INT as marker for string
             return res;
         }
 
@@ -416,24 +457,32 @@ void genStmt(CodeGenContext* ctx, ASTNode* node) {
         }
 
         case NODE_PRINT: {
-            ExprResult val = genExpr(ctx, node->data.expr);
-
-            if (val.type == TYPE_FLOAT) {
-                fprintf(ctx->output, "    mov.s $f12, $f%d\n", val.reg);
-                fprintf(ctx->output, "    li $v0, 2\n");
+            // Check if it's a string literal
+            if (node->data.expr && node->data.expr->type == NODE_STR) {
+                int strId = getStringConstID(ctx, node->data.expr->data.str);
+                fprintf(ctx->output, "    la $a0, str_%d\n", strId);
+                fprintf(ctx->output, "    li $v0, 4\n");
                 fprintf(ctx->output, "    syscall\n");
-                releaseFloatReg(&ctx->regPool, val.reg);
             } else {
-                fprintf(ctx->output, "    move $a0, $t%d\n", val.reg);
-                fprintf(ctx->output, "    li $v0, 1\n");
-                fprintf(ctx->output, "    syscall\n");
-                releaseTempReg(&ctx->regPool, val.reg);
-            }
+                ExprResult val = genExpr(ctx, node->data.expr);
 
-            // newline
-            fprintf(ctx->output, "    li $v0, 11\n");
-            fprintf(ctx->output, "    li $a0, 10\n");
-            fprintf(ctx->output, "    syscall\n");
+                if (val.type == TYPE_FLOAT) {
+                    fprintf(ctx->output, "    mov.s $f12, $f%d\n", val.reg);
+                    fprintf(ctx->output, "    li $v0, 2\n");
+                    fprintf(ctx->output, "    syscall\n");
+                    releaseFloatReg(&ctx->regPool, val.reg);
+                } else {
+                    fprintf(ctx->output, "    move $a0, $t%d\n", val.reg);
+                    fprintf(ctx->output, "    li $v0, 1\n");
+                    fprintf(ctx->output, "    syscall\n");
+                    releaseTempReg(&ctx->regPool, val.reg);
+                }
+
+                // newline
+                fprintf(ctx->output, "    li $v0, 11\n");
+                fprintf(ctx->output, "    li $a0, 10\n");
+                fprintf(ctx->output, "    syscall\n");
+            }
             break;
         }
 
@@ -539,14 +588,37 @@ void generateMIPS(ASTNode* root, const char* filename) {
     ctx.floatConstCapacity = 0;
     ctx.floatConsts = NULL;
     
+    // Initialize string constants
+    ctx.stringConstCount = 0;
+    ctx.stringConstIndex = 0;
+    ctx.stringConstCapacity = 0;
+    ctx.stringConsts = NULL;
+    
     // Symbol table already initialized during semantic phase
     // DO NOT reinitialize - it would lose all variable declarations
     
-    // First pass: collect all float constants
+    // First pass: collect all float constants and strings
     collectFloatConsts(&ctx, root);
     
     // MIPS program header
     fprintf(ctx.output, ".data\n");
+    
+    // Emit string constants
+    for (int i = 0; i < ctx.stringConstIndex; i++) {
+        fprintf(ctx.output, "str_%d: .asciiz \"", ctx.stringConsts[i].id);
+        // Output string with proper escaping
+        for (const char* p = ctx.stringConsts[i].value; *p; p++) {
+            switch (*p) {
+                case '\n': fprintf(ctx.output, "\\n"); break;
+                case '\t': fprintf(ctx.output, "\\t"); break;
+                case '\r': fprintf(ctx.output, "\\r"); break;
+                case '\\': fprintf(ctx.output, "\\\\"); break;
+                case '\"': fprintf(ctx.output, "\\\""); break;
+                default: fputc(*p, ctx.output); break;
+            }
+        }
+        fprintf(ctx.output, "\"\n");
+    }
     
     // Emit float constants
     emitFloatConsts(&ctx);

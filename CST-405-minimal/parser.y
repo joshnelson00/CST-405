@@ -56,6 +56,7 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %token <num> NUM        /* Number token carries an integer value */
 %token <num> FLT        /* Float token carries a float value */
 %token <str> ID         /* Identifier token carries a string */
+%token <str> STRING     /* String literal token */
 %token INT             /* Type keywords */
 %token FLOAT
 %token VOID
@@ -208,9 +209,7 @@ stmt:
     | assign    /* Assignment statement */
     | print_stmt /* Print statement */
     | return_stmt /* Return statement */
-<<<<<<< HEAD
     | while_stmt /* While loop statement */
-=======
     | func_call ';' {
         /* Bare function call as statement (e.g., fillNumbers(arr);) */
         $$ = $1;
@@ -219,7 +218,6 @@ stmt:
         /* Nested block statement */
         $$ = $2;
     }
->>>>>>> 23642d83d912906799b7530f774a9200ad4d3ba6
     | error ';' { yyerrok; }
     | error { yyerrok; }
     ;
@@ -376,6 +374,10 @@ expr:
     }
     | FLT { 
         $$ = createFlt($1);  
+    }
+    | STRING {
+        $$ = createStr($1);
+        free($1);
     }
     | ID { 
         /* Check if variable is declared */
@@ -595,16 +597,6 @@ void yyerror(const char* s) {
     if (strstr(s, "syntax error")) {
         fprintf(stderr, "Unexpected token or incomplete statement\n");
         fprintf(stderr, "💡 Common fixes:\n");
-<<<<<<< HEAD
-        fprintf(stderr, "   • Add missing semicolon ';'\n");
-        fprintf(stderr, "   • Check for unmatched parentheses\n");
-        fprintf(stderr, "   • Verify variable declarations\n");
-        fprintf(stderr, "   • Check while loop syntax: while (condition) { ... }\n");
-    } else if (strstr(s, "unexpected")) {
-        fprintf(stderr, "Unexpected token in expression\n");
-        fprintf(stderr, "💡 Check operator precedence and parentheses\n");
-        fprintf(stderr, "   • While loops require condition in parentheses\n");
-=======
         fprintf(stderr, "   • Add missing semicolon ';' at the end of the previous statement\n");
         fprintf(stderr, "   • Check for unmatched braces '{' or '}'\n");
         fprintf(stderr, "   • Check for unmatched parentheses '(' or ')'\n");
@@ -615,7 +607,6 @@ void yyerror(const char* s) {
         fprintf(stderr, "💡 Suggestions:\n");
         fprintf(stderr, "   • Check operator precedence and parentheses\n");
         fprintf(stderr, "   • Ensure expressions are complete (e.g., a + b, not a +)\n");
->>>>>>> 23642d83d912906799b7530f774a9200ad4d3ba6
     } else {
         fprintf(stderr, "%s\n", s);
     }

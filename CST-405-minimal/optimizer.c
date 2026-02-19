@@ -350,8 +350,42 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
     FILE* out = fopen(filename, "w");
     if (!out) { fprintf(stderr, "Error: Cannot open output file %s\n", filename); return; }
 
-    fprintf(out, ".data\n\n");
-    fprintf(out, ".text\n");
+    // First pass: collect string literals
+    TACInstr* scan = optimizedList.head;
+    int stringCount = 0;
+    typedef struct {
+        char* value;
+        int id;
+    } StringLit;
+    StringLit strings[100];  // Max 100 string literals
+    
+    while (scan) {
+        if (scan->op == TAC_PRINT && scan->arg1 && scan->arg1[0] == '"') {
+            // Check if string already exists
+            int found = -1;
+            for (int i = 0; i < stringCount; i++) {
+                if (strcmp(strings[i].value, scan->arg1) == 0) {
+                    found = i;
+                    break;
+                }
+            }
+            if (found == -1 && stringCount < 100) {
+                strings[stringCount].value = scan->arg1;
+                strings[stringCount].id = stringCount;
+                stringCount++;
+            }
+        }
+        scan = scan->next;
+    }
+
+    // Output data section with strings
+    fprintf(out, ".data\n");
+    for (int i = 0; i < stringCount; i++) {
+        fprintf(out, "str_%d: .asciiz ", strings[i].id);
+        // Output string, processing escape sequences
+        fprintf(out, "%s\n", strings[i].value);  // TAC already has quotes
+    }
+    fprintf(out, "\n.text\n");
     fprintf(out, ".globl main\n\n");
 
     TACInstr* curr = optimizedList.head;
@@ -361,6 +395,7 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
     char* callArgs[10];
     int callArgCount = 0;
 
+    // Process all functions
     while (curr) {
         /* ── FUNC_DEF: set up a new function ── */
         if (curr->op == TAC_FUNC_DEF) {
@@ -547,12 +582,30 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
         }
 
         case TAC_PRINT:
-            mgLoad(out, curr->arg1, "$a0");
-            fprintf(out, "    li $v0, 1\n");
-            fprintf(out, "    syscall\n");
-            fprintf(out, "    li $a0, 10\n");
-            fprintf(out, "    li $v0, 11\n");
-            fprintf(out, "    syscall\n");
+            // Check if it's a string literal (starts with quote)
+            if (curr->arg1 && curr->arg1[0] == '"') {
+                // Find string ID
+                int strId = -1;
+                for (int i = 0; i < stringCount; i++) {
+                    if (strcmp(strings[i].value, curr->arg1) == 0) {
+                        strId = i;
+                        break;
+                    }
+                }
+                if (strId >= 0) {
+                    fprintf(out, "    la $a0, str_%d\n", strId);
+                    fprintf(out, "    li $v0, 4\n");
+                    fprintf(out, "    syscall\n");
+                }
+            } else {
+                // Regular integer/variable print
+                mgLoad(out, curr->arg1, "$a0");
+                fprintf(out, "    li $v0, 1\n");
+                fprintf(out, "    syscall\n");
+                fprintf(out, "    li $a0, 10\n");
+                fprintf(out, "    li $v0, 11\n");
+                fprintf(out, "    syscall\n");
+            }
             break;
 
         case TAC_ARG:

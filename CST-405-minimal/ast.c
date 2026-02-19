@@ -56,6 +56,33 @@ ASTNode* createFlt(double value) {
     return node;
 }
 
+/* Create a string literal node */
+ASTNode* createStr(char* str) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_STR;
+    /* Remove quotes and process escape sequences */
+    int len = strlen(str);
+    char* processed = malloc(len + 1);
+    int j = 0;
+    for (int i = 1; i < len - 1; i++) {  /* Skip opening and closing quotes */
+        if (str[i] == '\\' && i + 1 < len - 1) {
+            switch (str[i + 1]) {
+                case 'n': processed[j++] = '\n'; i++; break;
+                case 't': processed[j++] = '\t'; i++; break;
+                case 'r': processed[j++] = '\r'; i++; break;
+                case '\\': processed[j++] = '\\'; i++; break;
+                case '"': processed[j++] = '"'; i++; break;
+                default: processed[j++] = str[i]; break;
+            }
+        } else {
+            processed[j++] = str[i];
+        }
+    }
+    processed[j] = '\0';
+    node->data.str = processed;
+    return node;
+}
+
 /* Create a variable reference node */
 ASTNode* createVar(char* name) {
     ASTNode* node = ast_alloc(sizeof(ASTNode));
@@ -163,6 +190,9 @@ void printAST(ASTNode* node, int level) {
             break;
         case NODE_FLT:
             printf("FLT: %f\n", node->data.flt);
+            break;
+        case NODE_STR:
+            printf("STR: \"%s\"\n", node->data.str);
             break;
         case NODE_VAR:
             printf("VAR: %s\n", node->data.var.name);

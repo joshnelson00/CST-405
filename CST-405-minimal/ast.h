@@ -22,6 +22,7 @@ typedef struct MemoryPool {
 typedef enum {
     NODE_NUM,       /* Numeric literal (e.g., 42) */
     NODE_FLT,       /* Numeric float (e.g., 43.46) */
+    NODE_STR,       /* String literal (e.g., "hello\n") */
     NODE_VAR,       /* Variable reference (e.g., x) */
     NODE_BINOP,     /* Binary operation (e.g., x + y) */
     NODE_DECL,      /* Variable declaration (e.g., int x) */
@@ -62,6 +63,9 @@ typedef struct ASTNode {
         int num;
 
         float flt;
+        
+        /* String literal value (NODE_STR) */
+        char* str;
         
         /* Variable or declaration name (NODE_VAR, NODE_DECL) */
         struct {
@@ -169,7 +173,8 @@ typedef struct ASTNode {
  * These functions are called by the parser to build the tree
  */
 ASTNode* createNum(int value);                                   /* Create number node */
-ASTNode* createFlt(double value);                                   /* Create float node */ 
+ASTNode* createFlt(double value);                                   /* Create float node */
+ASTNode* createStr(char* str);                                   /* Create string node */
 ASTNode* createVar(char* name);                                  /* Create variable node */
 ASTNode* createBinOp(int op, ASTNode* left, ASTNode* right);   /* Create binary op node */
 ASTNode* createDecl(char* name, VarType type);                              /* Create declaration node */

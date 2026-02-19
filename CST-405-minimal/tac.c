@@ -84,6 +84,12 @@ char* generateTACExpr(ASTNode* node) {
             sprintf(temp, "%f", node->data.flt);
             return temp;
         }
+        case NODE_STR: {
+            /* Return string literal as-is with quotes for TAC */
+            char* temp = malloc(strlen(node->data.str) + 3);
+            sprintf(temp, "\"%s\"", node->data.str);
+            return temp;
+        }
         case NODE_VAR:
             return strdup(node->data.var.name);
         case NODE_BINOP: {

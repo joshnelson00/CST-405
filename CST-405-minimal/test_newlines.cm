@@ -1,0 +1,11 @@
+int main() {
+    print("Hello, World!\n");
+    print("This is line 1\n");
+    print("This is line 2\n");
+    int x;
+    x = 42;
+    print("The value is: ");
+    print(x);
+    print("\nDone!\n");
+    return 0;
+}

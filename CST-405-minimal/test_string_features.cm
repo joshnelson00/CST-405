@@ -1,0 +1,15 @@
+int main() {
+    print("=== Testing Newlines ===\n");
+    print("Line 1\n");
+    print("Line 2\n");
+    print("Line 3\n");
+    print("\n");  
+    print("After blank line\n");
+    print("Tab test:\tindented\n");
+    int x;
+    x = 100;
+    print("Value: ");
+    print(x);
+    print("\nAll done!\n");
+    return 0;
+}
