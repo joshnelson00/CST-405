@@ -37,8 +37,17 @@ typedef enum {
     NODE_FUNC_CALL, /* Function call (e.g., f(x, y)) */
     NODE_ARG_LIST, /* Argument list (e.g., x, y) */
     NODE_STMT_LIST,  /* List of statements (program structure) */
-    NODE_FUNC_LIST  /* List of functions (program structure) */
+    NODE_FUNC_LIST,  /* List of functions (program structure) */
+    NODE_WHILE      /* While loop (e.g., while (cond) { ... }) */
 } NodeType;
+
+/* Comparison operators for NODE_BINOP */
+#define OP_EQ 1000  /* == */
+#define OP_NE 1001  /* != */
+#define OP_LT 1002  /* < */
+#define OP_GT 1003  /* > */
+#define OP_LE 1004  /* <= */
+#define OP_GE 1005  /* >= */
 
 /* AST NODE STRUCTURE
  * Uses a union to efficiently store different node data
@@ -83,7 +92,7 @@ typedef struct ASTNode {
         
         /* Binary operation structure (NODE_BINOP) */
         struct {
-            char op;                    /* Operator character ('+') */
+            int op;                     /* Operator ('+', '-', '*', '/', or OP_EQ, OP_NE, etc.) */
             struct ASTNode* left;       /* Left operand */
             struct ASTNode* right;      /* Right operand */
         } binop;
@@ -147,6 +156,12 @@ typedef struct ASTNode {
             struct ASTNode* arg;        /* Current argument */
             struct ASTNode* next;        /* Next argument (NULL if last) */
         } arg_list;
+        
+        /* While loop structure (NODE_WHILE) */
+        struct {
+            struct ASTNode* condition;  /* Loop condition */
+            struct ASTNode* body;       /* Loop body (statement list) */
+        } while_loop;
     } data;
 } ASTNode;
 
@@ -156,7 +171,7 @@ typedef struct ASTNode {
 ASTNode* createNum(int value);                                   /* Create number node */
 ASTNode* createFlt(double value);                                   /* Create float node */ 
 ASTNode* createVar(char* name);                                  /* Create variable node */
-ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right);   /* Create binary op node */
+ASTNode* createBinOp(int op, ASTNode* left, ASTNode* right);   /* Create binary op node */
 ASTNode* createDecl(char* name, VarType type);                              /* Create declaration node */
 ASTNode* createArrayDecl(char* name, VarType type, int size);   /* Create array declaration node */
 ASTNode* createArrayAccess(char* name, ASTNode* index);         /* Create array access node */
@@ -171,7 +186,8 @@ ASTNode* createParamList(ASTNode* param, ASTNode* next);         /* Create param
 ASTNode* createFuncCall(char* name, ASTNode* args);              /* Create function call node */
 ASTNode* createArgList(ASTNode* arg, ASTNode* next);             /* Create argument list */
 ASTNode* createStmtList(ASTNode* stmt1, ASTNode* stmt2);        /* Create statement list */
-ASTNode* createFuncList(ASTNode* func1, ASTNode* func2);         /* Create function list */    
+ASTNode* createFuncList(ASTNode* func1, ASTNode* func2);         /* Create function list */
+ASTNode* createWhile(ASTNode* condition, ASTNode* body);         /* Create while loop node */
 
 /* AST DISPLAY FUNCTION */
 void printAST(ASTNode* node, int level);                        /* Pretty-print the AST */

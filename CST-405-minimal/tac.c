@@ -12,6 +12,7 @@ extern TACList optimizedList;
 void initTAC() {
     tacList.head = tacList.tail = NULL;
     tacList.tempCount = 0;
+    tacList.labelCount = 0;
     optimizedList.head = optimizedList.tail = NULL;
 }
 
@@ -20,6 +21,13 @@ char* newTemp() {
     char* temp = malloc(10);
     sprintf(temp, "t%d", tacList.tempCount++);
     return temp;
+}
+
+/* Generate a new label */
+char* newLabel() {
+    char* label = malloc(10);
+    sprintf(label, "L%d", tacList.labelCount++);
+    return label;
 }
 
 /* Create a TAC instruction */
@@ -84,13 +92,36 @@ char* generateTACExpr(ASTNode* node) {
             char* temp = newTemp();
 
             switch(node->data.binop.op) {
-                case '+': appendTAC(createTAC(TAC_ADD, left, right, temp)); break;
-                case '-': appendTAC(createTAC(TAC_SUBTRACT, left, right, temp)); break;
-                case '*': appendTAC(createTAC(TAC_MULTIPLY, left, right, temp)); break;
-                case '/': 
-                    // Emit divide-by-zero check before division
+                case '+':
+                    appendTAC(createTAC(TAC_ADD, left, right, temp));
+                    break;
+                case '-':
+                    appendTAC(createTAC(TAC_SUBTRACT, left, right, temp));
+                    break;
+                case '*':
+                    appendTAC(createTAC(TAC_MULTIPLY, left, right, temp));
+                    break;
+                case '/':
                     appendTAC(createTAC(TAC_DIV_CHECK, right, NULL, NULL));
-                    appendTAC(createTAC(TAC_DIVIDE, left, right, temp)); 
+                    appendTAC(createTAC(TAC_DIVIDE, left, right, temp));
+                    break;
+                case OP_EQ:
+                    appendTAC(createTAC(TAC_EQ, left, right, temp));
+                    break;
+                case OP_NE:
+                    appendTAC(createTAC(TAC_NE, left, right, temp));
+                    break;
+                case OP_LT:
+                    appendTAC(createTAC(TAC_LT, left, right, temp));
+                    break;
+                case OP_GT:
+                    appendTAC(createTAC(TAC_GT, left, right, temp));
+                    break;
+                case OP_LE:
+                    appendTAC(createTAC(TAC_LE, left, right, temp));
+                    break;
+                case OP_GE:
+                    appendTAC(createTAC(TAC_GE, left, right, temp));
                     break;
             }
             return temp;
@@ -206,6 +237,31 @@ void generateTAC(ASTNode* node) {
             appendTAC(createTAC(TAC_ARRAY_WRITE, array_name, index, value));
             break;
         }
+        
+        case NODE_WHILE: {
+            char* start_label = newLabel();
+            char* end_label = newLabel();
+            
+            // Label for loop start
+            appendTAC(createTAC(TAC_LABEL, start_label, NULL, NULL));
+            
+            // Evaluate condition (this generates TAC instructions for the comparison)
+            char* condition = generateTACExpr(node->data.while_loop.condition);
+            
+            // If condition is false, jump to end
+            appendTAC(createTAC(TAC_IF_FALSE, condition, NULL, end_label));
+            
+            // Generate body
+            generateTAC(node->data.while_loop.body);
+            
+            // Jump back to start
+            appendTAC(createTAC(TAC_GOTO, start_label, NULL, NULL));
+            
+            // Label for loop end
+            appendTAC(createTAC(TAC_LABEL, end_label, NULL, NULL));
+            break;
+        }
+        
         default:
             break;
     }
@@ -293,6 +349,33 @@ void printTACToFile(const char* filename) {
             case TAC_DIV_CHECK:
                 fprintf(file, " %d: DIV_CHECK %s != 0          // Runtime divide-by-zero check\n", instrNum++, curr->arg1);
                 break;
+            case TAC_LABEL:
+                fprintf(file, "%s:                            // Loop label\n", curr->arg1);
+                break;
+            case TAC_GOTO:
+                fprintf(file, " %d: GOTO %s                    // Unconditional jump\n", instrNum++, curr->arg1);
+                break;
+            case TAC_IF_FALSE:
+                fprintf(file, " %d: IF_FALSE %s GOTO %s       // Conditional jump\n", instrNum++, curr->arg1, curr->result);
+                break;
+            case TAC_EQ:
+                fprintf(file, " %d: %s = %s == %s             // Equality check\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_NE:
+                fprintf(file, " %d: %s = %s != %s             // Not equal check\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LT:
+                fprintf(file, " %d: %s = %s < %s              // Less than check\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GT:
+                fprintf(file, " %d: %s = %s > %s              // Greater than check\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LE:
+                fprintf(file, " %d: %s = %s <= %s             // Less or equal check\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GE:
+                fprintf(file, " %d: %s = %s >= %s             // Greater or equal check\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
             default:
                 break;
         }
@@ -340,6 +423,33 @@ void printTAC() {
                 break;
             case TAC_DIV_CHECK:
                 printf("DIV_CHECK %s != 0\n", curr->arg1);
+                break;
+            case TAC_LABEL:
+                printf("%s:\n", curr->arg1);
+                break;
+            case TAC_GOTO:
+                printf("GOTO %s\n", curr->arg1);
+                break;
+            case TAC_IF_FALSE:
+                printf("IF_FALSE %s GOTO %s\n", curr->arg1, curr->result);
+                break;
+            case TAC_EQ:
+                printf("%s = %s == %s\n", curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_NE:
+                printf("%s = %s != %s\n", curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LT:
+                printf("%s = %s < %s\n", curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GT:
+                printf("%s = %s > %s\n", curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LE:
+                printf("%s = %s <= %s\n", curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GE:
+                printf("%s = %s >= %s\n", curr->result, curr->arg1, curr->arg2);
                 break;
             default: break;
         }

@@ -27,6 +27,7 @@ int yycolumn = 1;
 "void"          { yycolumn += yyleng; return VOID; }
 "print"         { yycolumn += yyleng; return PRINT; }
 "return"        { yycolumn += yyleng; return RETURN; }
+"while"         { yycolumn += yyleng; return WHILE; }
 "["             { yycolumn++; return '['; }
 "]"             { yycolumn++; return ']'; }
 
@@ -45,6 +46,12 @@ int yycolumn = 1;
     yycolumn += yyleng;
     return NUM; 
 }
+"=="            { yycolumn += yyleng; return EQ; }
+"!="            { yycolumn += yyleng; return NE; }
+"<="            { yycolumn += yyleng; return LE; }
+">="            { yycolumn += yyleng; return GE; }
+"<"             { yycolumn++; return LT; }
+">"             { yycolumn++; return GT; }
 "+"             { yycolumn++; return '+'; }
 "-"             { yycolumn++; return '-'; }
 "*"             { yycolumn++; return '*'; }

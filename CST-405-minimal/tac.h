@@ -27,7 +27,16 @@ typedef enum {
     TAC_RETURN,      /* Return statement: return expr */
     TAC_ARG,         /* Function argument: arg expr */
     TAC_BOUNDS_CHECK,/* Bounds check: check arg1[arg2] < result(size) */
-    TAC_DIV_CHECK    /* Divide-by-zero check: verify arg1 != 0 */
+    TAC_DIV_CHECK,   /* Divide-by-zero check: verify arg1 != 0 */
+    TAC_LABEL,       /* Label: label name */
+    TAC_GOTO,        /* Unconditional jump: goto label */
+    TAC_IF_FALSE,    /* Conditional jump: if !arg1 goto result */
+    TAC_EQ,          /* Equality: result = arg1 == arg2 */
+    TAC_NE,          /* Not equal: result = arg1 != arg2 */
+    TAC_LT,          /* Less than: result = arg1 < arg2 */
+    TAC_GT,          /* Greater than: result = arg1 > arg2 */
+    TAC_LE,          /* Less or equal: result = arg1 <= arg2 */
+    TAC_GE           /* Greater or equal: result = arg1 >= arg2 */
 } TACOp;
 
 /* TAC INSTRUCTION STRUCTURE */
@@ -44,11 +53,13 @@ typedef struct {
     TACInstr* head;    /* First instruction */
     TACInstr* tail;    /* Last instruction (for efficient append) */
     int tempCount;     /* Counter for temporary variables (t0, t1, ...) */
+    int labelCount;    /* Counter for labels (L0, L1, ...) */
 } TACList;
 
 /* TAC GENERATION FUNCTIONS */
 void initTAC();                                                    /* Initialize TAC lists */
 char* newTemp();                                                   /* Generate new temp variable */
+char* newLabel();                                                  /* Generate new label */
 TACInstr* createTAC(TACOp op, char* arg1, char* arg2, char* result); /* Create TAC instruction */
 void appendTAC(TACInstr* instr);                                  /* Add instruction to list */
 void generateTAC(ASTNode* node);                                  /* Convert AST to TAC */

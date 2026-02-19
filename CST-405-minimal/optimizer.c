@@ -60,9 +60,15 @@ void optimizeTAC2() {
     
     VarValue values[100];
     int valueCount = 0;
+    int insideLoop = 0;  // Track if we're inside a loop
     
     while (curr) {
         TACInstr* newInstr = NULL;
+        
+        // Detect loop boundaries
+        if (curr->op == TAC_LABEL) {
+            insideLoop = 1;  // Entering a loop
+        }
         
         switch(curr->op) {
             case TAC_ADD: {
@@ -70,21 +76,24 @@ void optimizeTAC2() {
                 char* right = curr->arg2;
                 
                 // Look up values in propagation table (search from most recent)
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, left) == 0) {
-                        left = values[i].value;
-                        break;
+                // Skip lookup inside loops to avoid propagating stale values
+                if (!insideLoop) {
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, left) == 0) {
+                            left = values[i].value;
+                            break;
+                        }
                     }
-                }
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, right) == 0) {
-                        right = values[i].value;
-                        break;
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, right) == 0) {
+                            right = values[i].value;
+                            break;
+                        }
                     }
                 }
                 
-                // Constant folding
-                if (isdigit(left[0]) && isdigit(right[0])) {
+                // Constant folding (disable inside loops)
+                if (!insideLoop && isdigit(left[0]) && isdigit(right[0])) {
                     int result = atoi(left) + atoi(right);
                     char* resultStr = malloc(20);
                     sprintf(resultStr, "%d", result);
@@ -104,20 +113,22 @@ void optimizeTAC2() {
                 char* left = curr->arg1;
                 char* right = curr->arg2;
 
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, left) == 0) {
-                        left = values[i].value;
-                        break;
+                if (!insideLoop) {
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, left) == 0) {
+                            left = values[i].value;
+                            break;
+                        }
                     }
-                }
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, right) == 0) {
-                        right = values[i].value;
-                        break;
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, right) == 0) {
+                            right = values[i].value;
+                            break;
+                        }
                     }
                 }
 
-                if (isConst(left) && isConst(right)) {
+                if (!insideLoop && isConst(left) && isConst(right)) {
                     int result = atoi(left) * atoi(right);
                     char* resultStr = malloc(20);
 
@@ -137,17 +148,21 @@ void optimizeTAC2() {
                 char* value = curr->arg1;
                 
                 // Look up value in propagation table (search from most recent)
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, value) == 0) {
-                        value = values[i].value;
-                        break;
+                if (!insideLoop) {
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, value) == 0) {
+                            value = values[i].value;
+                            break;
+                        }
                     }
                 }
                 
-                // Store for propagation
-                values[valueCount].var = strdup(curr->result);
-                values[valueCount].value = strdup(value);
-                valueCount++;
+                // Store for propagation (disable inside loops)
+                if (!insideLoop) {
+                    values[valueCount].var = strdup(curr->result);
+                    values[valueCount].value = strdup(value);
+                    valueCount++;
+                }
                 
                 newInstr = createTAC(TAC_ASSIGN, value, NULL, curr->result);
                 break;
@@ -156,10 +171,12 @@ void optimizeTAC2() {
                 char* value = curr->arg1;
                 
                 // Look up value in propagation table
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, value) == 0) {
-                        value = values[i].value;
-                        break;
+                if (!insideLoop) {
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, value) == 0) {
+                            value = values[i].value;
+                            break;
+                        }
                     }
                 }
                 
@@ -170,13 +187,15 @@ void optimizeTAC2() {
             case TAC_SUBTRACT: {
                 char* left = curr->arg1;
                 char* right = curr->arg2;
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, left) == 0) { left = values[i].value; break; }
+                if (!insideLoop) {
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, left) == 0) { left = values[i].value; break; }
+                    }
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, right) == 0) { right = values[i].value; break; }
+                    }
                 }
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, right) == 0) { right = values[i].value; break; }
-                }
-                if (isConst(left) && isConst(right)) {
+                if (!insideLoop && isConst(left) && isConst(right)) {
                     int result = atoi(left) - atoi(right);
                     char* resultStr = malloc(20);
                     sprintf(resultStr, "%d", result);
@@ -192,13 +211,15 @@ void optimizeTAC2() {
             case TAC_DIVIDE: {
                 char* left = curr->arg1;
                 char* right = curr->arg2;
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, left) == 0) { left = values[i].value; break; }
+                if (!insideLoop) {
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, left) == 0) { left = values[i].value; break; }
+                    }
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, right) == 0) { right = values[i].value; break; }
+                    }
                 }
-                for (int i = valueCount - 1; i >= 0; i--) {
-                    if (strcmp(values[i].var, right) == 0) { right = values[i].value; break; }
-                }
-                if (isConst(left) && isConst(right) && atoi(right) != 0) {
+                if (!insideLoop && isConst(left) && isConst(right) && atoi(right) != 0) {
                     int result = atoi(left) / atoi(right);
                     char* resultStr = malloc(20);
                     sprintf(resultStr, "%d", result);
@@ -221,8 +242,22 @@ void optimizeTAC2() {
             case TAC_ARRAY_WRITE:
             case TAC_ARRAY_READ:
             case TAC_BOUNDS_CHECK:
-            case TAC_DIV_CHECK: {
+            case TAC_DIV_CHECK:
+            case TAC_LABEL:
+            case TAC_GOTO:
+                // GOTO marks end of loop body - reset insideLoop flag
+                if (curr->op == TAC_GOTO) {
+                    insideLoop = 0;
+                }
+            case TAC_IF_FALSE:
+            case TAC_EQ:
+            case TAC_NE:
+            case TAC_LT:
+            case TAC_GT:
+            case TAC_LE:
+            case TAC_GE: {
                 // Preserve these instructions as-is
+                // TODO: Could add constant folding for comparisons in future
                 newInstr = createTAC(curr->op, curr->arg1, curr->arg2, curr->result);
                 break;
             }
@@ -565,6 +600,61 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             }
             break;
 
+        case TAC_LABEL:
+            fprintf(out, "%s:\n", curr->arg1);
+            break;
+
+        case TAC_GOTO:
+            fprintf(out, "    j %s\n", curr->arg1);
+            break;
+
+        case TAC_IF_FALSE:
+            mgLoad(out, curr->arg1, "$t0");
+            fprintf(out, "    beqz $t0, %s\n", curr->result);
+            break;
+
+        case TAC_EQ:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    seq $t2, $t0, $t1\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
+        case TAC_NE:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    sne $t2, $t0, $t1\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
+        case TAC_LT:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    slt $t2, $t0, $t1\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
+        case TAC_GT:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    sgt $t2, $t0, $t1\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
+        case TAC_LE:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    sle $t2, $t0, $t1\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
+        case TAC_GE:
+            mgLoad(out, curr->arg1, "$t0");
+            mgLoad(out, curr->arg2, "$t1");
+            fprintf(out, "    sge $t2, $t0, $t1\n");
+            mgStore(out, curr->result, "$t2");
+            break;
+
         default: break;
         }
 
@@ -645,6 +735,33 @@ void printOptimizedTAC2() {
             case TAC_DIV_CHECK:
                 printf("%2d: DIV_CHECK %s != 0        // Runtime divide-by-zero check\n", instrNum++, curr->arg1);
                 break;
+            case TAC_LABEL:
+                printf("%s:                          // Loop label\n", curr->arg1);
+                break;
+            case TAC_GOTO:
+                printf("%2d: GOTO %s                  // Unconditional jump\n", instrNum++, curr->arg1);
+                break;
+            case TAC_IF_FALSE:
+                printf("%2d: IF_FALSE %s GOTO %s     // Conditional jump\n", instrNum++, curr->arg1, curr->result);
+                break;
+            case TAC_EQ:
+                printf("%2d: %s = %s == %s           // Equality\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_NE:
+                printf("%2d: %s = %s != %s           // Not equal\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LT:
+                printf("%2d: %s = %s < %s            // Less than\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GT:
+                printf("%2d: %s = %s > %s            // Greater than\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LE:
+                printf("%2d: %s = %s <= %s           // Less or equal\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GE:
+                printf("%2d: %s = %s >= %s           // Greater or equal\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
         }
         curr = curr->next;
     }
@@ -722,6 +839,33 @@ void printOptimizedTACToFile2(const char* filename) {
             case TAC_DIV_CHECK:
                 fprintf(file, "%2d: DIV_CHECK %s != 0        // Runtime divide-by-zero check\n", instrNum++, curr->arg1);
                 break;
+            case TAC_LABEL:
+                fprintf(file, "%s:                          // Loop label\n", curr->arg1);
+                break;
+            case TAC_GOTO:
+                fprintf(file, "%2d: GOTO %s                  // Unconditional jump\n", instrNum++, curr->arg1);
+                break;
+            case TAC_IF_FALSE:
+                fprintf(file, "%2d: IF_FALSE %s GOTO %s     // Conditional jump\n", instrNum++, curr->arg1, curr->result);
+                break;
+            case TAC_EQ:
+                fprintf(file, "%2d: %s = %s == %s           // Equality\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_NE:
+                fprintf(file, "%2d: %s = %s != %s           // Not equal\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LT:
+                fprintf(file, "%2d: %s = %s < %s            // Less than\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GT:
+                fprintf(file, "%2d: %s = %s > %s            // Greater than\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LE:
+                fprintf(file, "%2d: %s = %s <= %s           // Less or equal\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GE:
+                fprintf(file, "%2d: %s = %s >= %s           // Greater or equal\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
         }
         curr = curr->next;
     }
@@ -798,6 +942,33 @@ void printTACToFile2(const char* filename) {
                 break;
             case TAC_DIV_CHECK:
                 fprintf(file, "%2d: DIV_CHECK %s != 0\n", instrNum++, curr->arg1);
+                break;
+            case TAC_LABEL:
+                fprintf(file, "%s:\n", curr->arg1);
+                break;
+            case TAC_GOTO:
+                fprintf(file, "%2d: GOTO %s\n", instrNum++, curr->arg1);
+                break;
+            case TAC_IF_FALSE:
+                fprintf(file, "%2d: IF_FALSE %s GOTO %s\n", instrNum++, curr->arg1, curr->result);
+                break;
+            case TAC_EQ:
+                fprintf(file, "%2d: %s = %s == %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_NE:
+                fprintf(file, "%2d: %s = %s != %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LT:
+                fprintf(file, "%2d: %s = %s < %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GT:
+                fprintf(file, "%2d: %s = %s > %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_LE:
+                fprintf(file, "%2d: %s = %s <= %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
+                break;
+            case TAC_GE:
+                fprintf(file, "%2d: %s = %s >= %s\n", instrNum++, curr->result, curr->arg1, curr->arg2);
                 break;
         }
         curr = curr->next;

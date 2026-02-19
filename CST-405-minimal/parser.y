@@ -19,6 +19,25 @@ extern int yycolumn;     /* Current column number from scanner */
 
 void yyerror(const char* s);  /* Error handling function */
 ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
+
+/* Function to check for infinite/dead loops */
+void checkWhileLoop(ASTNode* condition) {
+    if (!condition) return;
+    
+    // Check for constant true condition (infinite loop)
+    if (condition->type == NODE_NUM) {
+        if (condition->data.num != 0) {
+            fprintf(stderr, "\n⚠️  Warning: Infinite loop detected at line %d\n", yyline);
+            fprintf(stderr, "   Loop condition is always true (non-zero constant)\n");
+            fprintf(stderr, "💡 Consider adding a break condition or loop counter\n\n");
+        } else {
+            fprintf(stderr, "\n⚠️  Warning: Dead loop detected at line %d\n", yyline);
+            fprintf(stderr, "   Loop condition is always false (zero constant)\n");
+            fprintf(stderr, "💡 Loop body will never execute\n\n");
+        }
+    }
+    // Could add more sophisticated checks here for variable analysis
+}
 %}
 
 /* SEMANTIC VALUES UNION
@@ -40,11 +59,14 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
 %token VOID
 %token PRINT           /* Statement keywords */
 %token RETURN
+%token WHILE           /* Loop keywords */
+%token EQ NE LT GT LE GE   /* Comparison operators */
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program func_list func param_list param stmt_list stmt decl assign expr print_stmt return_stmt func_call arg_list
+%type <node> program func_list func param_list param stmt_list stmt decl assign expr print_stmt return_stmt func_call arg_list while_stmt
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
+%left EQ NE LT GT LE GE
 %left '+' '-'
 %left '*' '/'
 
@@ -184,6 +206,7 @@ stmt:
     | assign    /* Assignment statement */
     | print_stmt /* Print statement */
     | return_stmt /* Return statement */
+    | while_stmt /* While loop statement */
     | error ';' { yyerrok; }
     | error { yyerrok; }
     ;
@@ -273,6 +296,24 @@ expr:
     | expr '/' expr { 
         $$ = createBinOp('/', $1, $3);  
     }
+    | expr EQ expr {
+        $$ = createBinOp(OP_EQ, $1, $3);
+    }
+    | expr NE expr {
+        $$ = createBinOp(OP_NE, $1, $3);
+    }
+    | expr LT expr {
+        $$ = createBinOp(OP_LT, $1, $3);
+    }
+    | expr GT expr {
+        $$ = createBinOp(OP_GT, $1, $3);
+    }
+    | expr LE expr {
+        $$ = createBinOp(OP_LE, $1, $3);
+    }
+    | expr GE expr {
+        $$ = createBinOp(OP_GE, $1, $3);
+    }
     | '(' expr ')' {
         $$ = $2;
     }
@@ -337,6 +378,14 @@ arg_list:
     }
     ;
 
+/* WHILE LOOP RULE */
+while_stmt:
+    WHILE '(' expr ')' '{' stmt_list '}' {
+        checkWhileLoop($3);  /* Semantic check for infinite/dead loops */
+        $$ = createWhile($3, $6);
+    }
+    ;
+
 %%
 
 /* ERROR HANDLING - Enhanced error reporting with context */
@@ -353,9 +402,11 @@ void yyerror(const char* s) {
         fprintf(stderr, "   • Add missing semicolon ';'\n");
         fprintf(stderr, "   • Check for unmatched parentheses\n");
         fprintf(stderr, "   • Verify variable declarations\n");
+        fprintf(stderr, "   • Check while loop syntax: while (condition) { ... }\n");
     } else if (strstr(s, "unexpected")) {
         fprintf(stderr, "Unexpected token in expression\n");
         fprintf(stderr, "💡 Check operator precedence and parentheses\n");
+        fprintf(stderr, "   • While loops require condition in parentheses\n");
     } else {
         fprintf(stderr, "%s\n", s);
     }

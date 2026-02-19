@@ -65,7 +65,7 @@ ASTNode* createVar(char* name) {
     return node;
 }
 /* Create a binary operation node (for addition) */
-ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right) {
+ASTNode* createBinOp(int op, ASTNode* left, ASTNode* right) {
     ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_BINOP;
     node->data.binop.op = op;        /* Store operator (+) */
@@ -168,9 +168,23 @@ void printAST(ASTNode* node, int level) {
             printf("VAR: %s\n", node->data.var.name);
             break;
         case NODE_BINOP:
-            printf("BINOP: %c\n", node->data.binop.op);
+            if (node->data.binop.op >= 1000) {
+                // Comparison operators
+                const char* op_str;
+                switch(node->data.binop.op) {
+                    case OP_EQ: op_str = "=="; break;
+                    case OP_NE: op_str = "!="; break;
+                    case OP_LT: op_str = "<"; break;
+                    case OP_GT: op_str = ">"; break;
+                    case OP_LE: op_str = "<="; break;
+                    case OP_GE: op_str = ">="; break;
+                    default: op_str = "?"; break;
+                }
+                printf("BINOP: %s\n", op_str);
+            } else {
+                printf("BINOP: %c\n", node->data.binop.op);
+            }
             printAST(node->data.binop.left, level + 1);
-            printf("  ");
             printAST(node->data.binop.right, level + 1);
             break;
         case NODE_DECL:
@@ -253,6 +267,15 @@ void printAST(ASTNode* node, int level) {
             if (node->data.stmtlist.next) {
                 printAST(node->data.stmtlist.next, level);
             }
+            break;
+        case NODE_WHILE:
+            printf("WHILE\n");
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("Condition:\n");
+            printAST(node->data.while_loop.condition, level + 2);
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("Body:\n");
+            printAST(node->data.while_loop.body, level + 2);
             break;
         default:
             printf("UNKNOWN NODE TYPE: %d\n", node->type);
@@ -351,5 +374,14 @@ ASTNode* createFuncList(ASTNode* func1, ASTNode* func2) {
     node->type = NODE_FUNC_LIST;
     node->data.func_list.func = func1;
     node->data.func_list.next = func2;
+    return node;
+}
+
+/* Create a while loop node */
+ASTNode* createWhile(ASTNode* condition, ASTNode* body) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_WHILE;
+    node->data.while_loop.condition = condition;
+    node->data.while_loop.body = body;
     return node;
 }

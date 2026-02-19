@@ -1,67 +1,15 @@
-int unusedHelper(int x, int y) {
-    int z;
-    z = x - y;
-    return z;
-}
-
-int addNums(int a, int b) {
-    int result;
-    result = a + b;
-    return result;
-}
-
-int multNums(int x, int y) {
-    int product;
-    product = x * y;
-    return product;
-}
-
-int computeVal(int n) {
-    int temp1;
-    int answer;
-    temp1 = addNums(n, 8);
-    answer = multNums(temp1, 3);
-    return answer;
-}
-
-int sumArrayTwo(int arr[], int sz) {
-    int sum;
-    sum = arr[0] + arr[1];
-    return sum;
+int sumArray(int arr[], int n) {
+    int total;
+    total = arr[0] + arr[1];
+    print(total);
+    return total;
 }
 
 void main() {
-    int nums[5];
-    int val1;
-    int val2;
-    int val3;
-    int val4;
-
-    nums[0] = 100;
-    nums[1] = 50;
-    nums[2] = 25;
-
-    val1 = 5 + 3;
-    val2 = 10 * 2;
-    val1 = val1 + 0;
-    val2 = val2 * 1;
-    val3 = val1 * 0;
-
-    print(nums[0]);
-    print(nums[1]);
-    print(val1);
-    print(val2);
-    print(val3);
-
-    val1 = addNums(15, 35);
-    print(val1);
-
-    val2 = multNums(7, 8);
-    print(val2);
-
-    val3 = computeVal(10);
-    print(val3);
-
-    val4 = sumArrayTwo(nums, 2);
-    print(val4 +2);
+    int result;
+    int nums[2];
+    nums[0] = 10;
+    nums[1] = 20;
+    result = sumArray(nums, 2);
+    print(result);
 }
