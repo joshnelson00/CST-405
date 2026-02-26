@@ -179,7 +179,31 @@ ASTNode* createStmtList(ASTNode* stmt1, ASTNode* stmt2) {
 /* Display the AST structure (for debugging and education) */
 void printAST(ASTNode* node, int level) {
     if (!node) return;
-    
+
+    /* List/container nodes are transparent wrappers — they don't represent
+     * a single language construct, so they pass through without adding
+     * their own indentation. Without this, every nesting level of a list
+     * would double-stack the leading spaces. */
+    switch (node->type) {
+        case NODE_STMT_LIST:
+            printAST(node->data.stmtlist.stmt, level);
+            if (node->data.stmtlist.next) printAST(node->data.stmtlist.next, level);
+            return;
+        case NODE_FUNC_LIST:
+            printAST(node->data.func_list.func, level);
+            if (node->data.func_list.next) printAST(node->data.func_list.next, level);
+            return;
+        case NODE_PARAM_LIST:
+            printAST(node->data.param_list.param, level);
+            if (node->data.param_list.next) printAST(node->data.param_list.next, level);
+            return;
+        case NODE_ARG_LIST:
+            printAST(node->data.arg_list.arg, level);
+            if (node->data.arg_list.next) printAST(node->data.arg_list.next, level);
+            return;
+        default: break;
+    }
+
     /* Indent based on tree depth */
     for (int i = 0; i < level; i++) printf("  ");
     
@@ -238,7 +262,7 @@ void printAST(ASTNode* node, int level) {
             printAST(node->data.array_assign.value, level + 1);
             break;
         case NODE_ASSIGN:
-            printf("ASSIGN: %s = ", node->data.assign.var);
+            printf("ASSIGN: %s =\n", node->data.assign.var);
             printAST(node->data.assign.value, level + 1);
             break;
         case NODE_PRINT:
@@ -306,6 +330,36 @@ void printAST(ASTNode* node, int level) {
             for (int i = 0; i < level + 1; i++) printf("  ");
             printf("Body:\n");
             printAST(node->data.while_loop.body, level + 2);
+            break;
+        case NODE_FOR:
+            printf("FOR\n");
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("Init:\n");
+            if (node->data.for_loop.init) {
+                printAST(node->data.for_loop.init, level + 2);
+            } else {
+                for (int i = 0; i < level + 2; i++) printf("  ");
+                printf("(empty)\n");
+            }
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("Condition:\n");
+            if (node->data.for_loop.condition) {
+                printAST(node->data.for_loop.condition, level + 2);
+            } else {
+                for (int i = 0; i < level + 2; i++) printf("  ");
+                printf("(always true)\n");
+            }
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("Update:\n");
+            if (node->data.for_loop.update) {
+                printAST(node->data.for_loop.update, level + 2);
+            } else {
+                for (int i = 0; i < level + 2; i++) printf("  ");
+                printf("(empty)\n");
+            }
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("Body:\n");
+            printAST(node->data.for_loop.body, level + 2);
             break;
         default:
             printf("UNKNOWN NODE TYPE: %d\n", node->type);
@@ -413,5 +467,16 @@ ASTNode* createWhile(ASTNode* condition, ASTNode* body) {
     node->type = NODE_WHILE;
     node->data.while_loop.condition = condition;
     node->data.while_loop.body = body;
+    return node;
+}
+
+/* Create a for loop node */
+ASTNode* createFor(ASTNode* init, ASTNode* condition, ASTNode* update, ASTNode* body) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_FOR;
+    node->data.for_loop.init      = init;      /* NULL if omitted */
+    node->data.for_loop.condition = condition; /* NULL = always true */
+    node->data.for_loop.update    = update;    /* NULL if omitted */
+    node->data.for_loop.body      = body;
     return node;
 }

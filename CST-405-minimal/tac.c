@@ -267,6 +267,41 @@ void generateTAC(ASTNode* node) {
             appendTAC(createTAC(TAC_LABEL, end_label, NULL, NULL));
             break;
         }
+
+        case NODE_FOR: {
+            /* Emit: init; start: if(!cond) goto end; body; update; goto start; end: */
+            char* start_label = newLabel();
+            char* end_label   = newLabel();
+
+            /* 1. Initialization (may be NULL) */
+            if (node->data.for_loop.init) {
+                generateTAC(node->data.for_loop.init);
+            }
+
+            /* 2. Top-of-loop label */
+            appendTAC(createTAC(TAC_LABEL, start_label, NULL, NULL));
+
+            /* 3. Condition check — NULL means always true, so we skip the branch */
+            if (node->data.for_loop.condition) {
+                char* cond = generateTACExpr(node->data.for_loop.condition);
+                appendTAC(createTAC(TAC_IF_FALSE, cond, NULL, end_label));
+            }
+
+            /* 4. Loop body */
+            generateTAC(node->data.for_loop.body);
+
+            /* 5. Per-iteration update (may be NULL) */
+            if (node->data.for_loop.update) {
+                generateTAC(node->data.for_loop.update);
+            }
+
+            /* 6. Back-edge jump */
+            appendTAC(createTAC(TAC_GOTO, start_label, NULL, NULL));
+
+            /* 7. Exit label */
+            appendTAC(createTAC(TAC_LABEL, end_label, NULL, NULL));
+            break;
+        }
         
         default:
             break;

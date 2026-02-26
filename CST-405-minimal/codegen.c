@@ -178,6 +178,16 @@ void collectFloatConsts(CodeGenContext* ctx, ASTNode* node) {
             collectFloatConsts(ctx, node->data.stmtlist.stmt);
             collectFloatConsts(ctx, node->data.stmtlist.next);
             break;
+        case NODE_WHILE:
+            collectFloatConsts(ctx, node->data.while_loop.condition);
+            collectFloatConsts(ctx, node->data.while_loop.body);
+            break;
+        case NODE_FOR:
+            collectFloatConsts(ctx, node->data.for_loop.init);
+            collectFloatConsts(ctx, node->data.for_loop.condition);
+            collectFloatConsts(ctx, node->data.for_loop.update);
+            collectFloatConsts(ctx, node->data.for_loop.body);
+            break;
         default:
             break;
     }

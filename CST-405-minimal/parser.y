@@ -62,11 +62,11 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %token VOID
 %token PRINT           /* Statement keywords */
 %token RETURN
-%token WHILE           /* Loop keywords */
+%token WHILE FOR       /* Loop keywords */
 %token EQ NE LT GT LE GE   /* Comparison operators */
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program func_list func param_list param stmt_list stmt decl assign expr print_stmt return_stmt func_call arg_list while_stmt
+%type <node> program func_list func param_list param stmt_list stmt decl assign expr print_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
 %left EQ NE LT GT LE GE
@@ -210,6 +210,7 @@ stmt:
     | print_stmt /* Print statement */
     | return_stmt /* Return statement */
     | while_stmt /* While loop statement */
+    | for_stmt   /* For loop statement */
     | func_call ';' {
         /* Bare function call as statement (e.g., fillNumbers(arr);) */
         $$ = $1;
@@ -516,6 +517,90 @@ while_stmt:
     WHILE '(' expr ')' '{' stmt_list '}' {
         checkWhileLoop($3);  /* Semantic check for infinite/dead loops */
         $$ = createWhile($3, $6);
+    }
+    ;
+
+/* FOR LOOP RULE
+ * Positions: FOR '(' for_init ';' for_cond ';' for_update ')' stmt
+ *             1    2    3      4    5      6    7       8    9
+ */
+for_stmt:
+    FOR '(' for_init ';' for_cond ';' for_update ')' stmt {
+        $$ = createFor($3, $5, $7, $9);
+    }
+    ;
+
+/* FOR INIT - optional scalar or array assignment without trailing semicolon */
+for_init:
+    /* empty */ { $$ = NULL; }
+    | INT ID '=' expr {
+        /* Inline declaration: for (int i = 0; ...) */
+        addVar($2, TYPE_INT);
+        printSymTab();
+        $$ = createStmtList(createDecl($2, TYPE_INT), createAssign($2, $4));
+        free($2);
+    }
+    | FLOAT ID '=' expr {
+        /* Inline declaration: for (float x = 0.0; ...) */
+        addVar($2, TYPE_FLOAT);
+        printSymTab();
+        $$ = createStmtList(createDecl($2, TYPE_FLOAT), createAssign($2, $4));
+        free($2);
+    }
+    | ID '=' expr {
+        if (!isVarDeclared($1)) {
+            fprintf(stderr, "\n\u274c Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Variable '%s' is not declared\n", $1);
+            fprintf(stderr, "\U0001f4a1 Suggestions:\n");
+            fprintf(stderr, "   \u2022 Declare the variable first: int %s;\n", $1);
+            fprintf(stderr, "   \u2022 Check for typos in the variable name\n\n");
+            semantic_error_count++;
+        }
+        $$ = createAssign($1, $3);
+        free($1);
+    }
+    | ID '[' expr ']' '=' expr {
+        if (!isVarDeclared($1)) {
+            fprintf(stderr, "\n\u274c Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Variable '%s' is not declared\n", $1);
+            fprintf(stderr, "   \u2022 Check for typos in the variable name\n\n");
+            semantic_error_count++;
+        }
+        $$ = createArrayAssign($1, $3, $6);
+        free($1);
+    }
+    ;
+
+/* FOR COND - optional condition expression (NULL signals always-true) */
+for_cond:
+    /* empty */ { $$ = NULL; }
+    | expr      { $$ = $1; }
+    ;
+
+/* FOR UPDATE - optional scalar or array assignment without trailing semicolon */
+for_update:
+    /* empty */ { $$ = NULL; }
+    | ID '=' expr {
+        if (!isVarDeclared($1)) {
+            fprintf(stderr, "\n\u274c Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Variable '%s' is not declared\n", $1);
+            fprintf(stderr, "\U0001f4a1 Suggestions:\n");
+            fprintf(stderr, "   \u2022 Declare the variable first: int %s;\n", $1);
+            fprintf(stderr, "   \u2022 Check for typos in the variable name\n\n");
+            semantic_error_count++;
+        }
+        $$ = createAssign($1, $3);
+        free($1);
+    }
+    | ID '[' expr ']' '=' expr {
+        if (!isVarDeclared($1)) {
+            fprintf(stderr, "\n\u274c Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Variable '%s' is not declared\n", $1);
+            fprintf(stderr, "   \u2022 Check for typos in the variable name\n\n");
+            semantic_error_count++;
+        }
+        $$ = createArrayAssign($1, $3, $6);
+        free($1);
     }
     ;
 

@@ -39,7 +39,8 @@ typedef enum {
     NODE_ARG_LIST, /* Argument list (e.g., x, y) */
     NODE_STMT_LIST,  /* List of statements (program structure) */
     NODE_FUNC_LIST,  /* List of functions (program structure) */
-    NODE_WHILE      /* While loop (e.g., while (cond) { ... }) */
+    NODE_WHILE,     /* While loop (e.g., while (cond) { ... }) */
+    NODE_FOR        /* For loop  (e.g., for (i=0; i<n; i=i+1) { ... }) */
 } NodeType;
 
 /* Comparison operators for NODE_BINOP */
@@ -166,6 +167,14 @@ typedef struct ASTNode {
             struct ASTNode* condition;  /* Loop condition */
             struct ASTNode* body;       /* Loop body (statement list) */
         } while_loop;
+
+        /* For loop structure (NODE_FOR) */
+        struct {
+            struct ASTNode* init;       /* Initialization statement (NULL if omitted) */
+            struct ASTNode* condition;  /* Loop condition (NULL = always true) */
+            struct ASTNode* update;     /* Per-iteration update (NULL if omitted) */
+            struct ASTNode* body;       /* Loop body; should not be NULL */
+        } for_loop;
     } data;
 } ASTNode;
 
@@ -193,6 +202,7 @@ ASTNode* createArgList(ASTNode* arg, ASTNode* next);             /* Create argum
 ASTNode* createStmtList(ASTNode* stmt1, ASTNode* stmt2);        /* Create statement list */
 ASTNode* createFuncList(ASTNode* func1, ASTNode* func2);         /* Create function list */
 ASTNode* createWhile(ASTNode* condition, ASTNode* body);         /* Create while loop node */
+ASTNode* createFor(ASTNode* init, ASTNode* condition, ASTNode* update, ASTNode* body); /* Create for loop node */
 
 /* AST DISPLAY FUNCTION */
 void printAST(ASTNode* node, int level);                        /* Pretty-print the AST */

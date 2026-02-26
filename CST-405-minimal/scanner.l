@@ -28,6 +28,7 @@ int yycolumn = 1;
 "print"         { yycolumn += yyleng; return PRINT; }
 "return"        { yycolumn += yyleng; return RETURN; }
 "while"         { yycolumn += yyleng; return WHILE; }
+"for"           { yycolumn += yyleng; return FOR; }
 
 \"[^\"]*\" {
     /* String literal with escape sequences */
