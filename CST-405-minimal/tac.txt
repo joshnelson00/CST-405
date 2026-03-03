@@ -1,0 +1,12 @@
+Unoptimized TAC Instructions:
+─────────────────────────────
+ 1: FUNC main
+ 2: DECL x
+ 3: DECL y
+ 4: x = 5
+ 5: t0 = x > 0
+ 6: IF_FALSE t0 GOTO L0
+ 7: PRINT 1
+L0:
+ 8: PRINT "
+"

@@ -49,226 +49,331 @@ char* tempToReg(char* temp) {
     return temp; // Return as-is if not a temporary
 }
 
+/* =========================================================
+ * OPTIMIZER HELPER: check if a label is in the back-edge set
+ * (i.e., it is the target of some TAC_GOTO — a loop-start label)
+ * ========================================================= */
+static int isLoopStartLabel(const char* label, char** starts, int count) {
+    if (!label) return 0;
+    for (int i = 0; i < count; i++)
+        if (starts[i] && strcmp(starts[i], label) == 0) return 1;
+    return 0;
+}
+
+/* =========================================================
+ * OPTIMIZER HELPER: try to constant-fold a binary / relational op.
+ * Returns 1 and fills resultBuf on success; 0 if not foldable.
+ * Safe to call with non-constant operands — will return 0.
+ * ========================================================= */
+static int tryFoldBinop(TACOp op,
+                        const char* left, const char* right,
+                        char* resultBuf, size_t bufSize) {
+    if (!isConst(left) || !isConst(right)) return 0;
+    double l = atof(left), r = atof(right);
+    double res = 0;
+    switch (op) {
+        case TAC_ADD:      res = l + r;                      break;
+        case TAC_SUBTRACT: res = l - r;                      break;
+        case TAC_MULTIPLY: res = l * r;                      break;
+        case TAC_DIVIDE:
+            if ((int)r == 0) return 0;   /* never fold div-by-zero */
+            res = (int)l / (int)r;       break;
+        case TAC_EQ:  res = (l == r) ? 1 : 0;               break;
+        case TAC_NE:  res = (l != r) ? 1 : 0;               break;
+        case TAC_LT:  res = (l <  r) ? 1 : 0;               break;
+        case TAC_GT:  res = (l >  r) ? 1 : 0;               break;
+        case TAC_LE:  res = (l <= r) ? 1 : 0;               break;
+        case TAC_GE:  res = (l >= r) ? 1 : 0;               break;
+        default: return 0;
+    }
+    snprintf(resultBuf, bufSize, "%d", (int)res);
+    return 1;
+}
+
+/* =========================================================
+ * PROP-TABLE HELPER: look up a variable in the copy-propagation
+ * table (searches most-recent first).  Returns original name if
+ * not found.
+ * ========================================================= */
+typedef struct { char* var; char* value; } PropEntry;
+
+static const char* propLookup(const char* name,
+                               PropEntry* table, int count) {
+    if (!name) return name;
+    for (int i = count - 1; i >= 0; i--)
+        if (table[i].var && strcmp(table[i].var, name) == 0)
+            return table[i].value;
+    return name;
+}
+
+/* =========================================================
+ * optimizeTAC2  —  Main optimizer pass
+ *
+ * Techniques implemented:
+ *   1. Constant folding      — always, for any pure-constant operands
+ *                              (arithmetic + relational), works INSIDE loops
+ *   2. Copy propagation      — outside loops only (safe: no stale values)
+ *   3. Dead branch elim.     — IF_FALSE <nonzero const> → remove instruction
+ *   4. Dead loop  elim.      — IF_FALSE 0 → skip entire loop body
+ *   5. Correct loop depth    — tracks nested for/while depth with a counter
+ *                              so optimizations are scoped correctly
+ * ========================================================= */
 void optimizeTAC2() {
+
+    /* ── STEP 1: Pre-scan to collect BACKWARD-jump loop-start labels ──────────
+     * FIX for the merge-point register problem:
+     * Previously ALL GOTO targets were added to loopStarts.  This caused
+     * forward GOTOs from if-else (e.g. "GOTO end_label") to be incorrectly
+     * treated as loop back-edges, which:
+     *   • incremented loopDepth at if-else merge labels,
+     *   • decremented loopDepth (possibly below 0) at the forward GOTO,
+     *   • disabled copy-propagation inside real loops unnecessarily, and
+     *   • applied dead-loop elimination to if-else bodies.
+     *
+     * Fix: two-pass scan.
+     *   Pass 1 — record the instruction index of every LABEL.
+     *   Pass 2 — a GOTO is a back-edge (loop) only when its target label
+     *            appears BEFORE the GOTO in the instruction stream.
+     * ────────────────────────────────────────────────────────────────────────*/
+#define OPT_MAX_LABELS 256
+    char* loopStarts[OPT_MAX_LABELS];
+    int   nLoopStarts = 0;
+
+    /* Pass 1: record label positions */
+    typedef struct { char* name; int pos; } LPos;
+    LPos labelPos[OPT_MAX_LABELS];
+    int  nLabelPos = 0;
+    {
+        int idx = 0;
+        TACInstr* s = tacList.head;
+        while (s) {
+            if (s->op == TAC_LABEL && s->arg1 && nLabelPos < OPT_MAX_LABELS) {
+                labelPos[nLabelPos].name = s->arg1;
+                labelPos[nLabelPos].pos  = idx;
+                nLabelPos++;
+            }
+            idx++;
+            s = s->next;
+        }
+    }
+    /* Pass 2: only backward GOTOs (target precedes the GOTO) are loop starts */
+    {
+        int idx = 0;
+        TACInstr* s = tacList.head;
+        while (s) {
+            if (s->op == TAC_GOTO && s->arg1) {
+                int tgt = -1;
+                for (int i = 0; i < nLabelPos; i++)
+                    if (strcmp(labelPos[i].name, s->arg1) == 0) {
+                        tgt = labelPos[i].pos; break;
+                    }
+                /* Back-edge: target label comes before this GOTO */
+                if (tgt >= 0 && tgt < idx)
+                    if (!isLoopStartLabel(s->arg1, loopStarts, nLoopStarts)
+                        && nLoopStarts < OPT_MAX_LABELS)
+                        loopStarts[nLoopStarts++] = s->arg1;
+            }
+            idx++;
+            s = s->next;
+        }
+    }
+
+    /* ── STEP 2: Single-pass optimizing traversal ─────────────────── */
+    PropEntry propTable[256];
+    int propCount  = 0;
+    int loopDepth  = 0;   /* 0 = outside all loops; N = N levels deep */
+
     TACInstr* curr = tacList.head;
-    
-    // Copy propagation table
-    typedef struct {
-        char* var;
-        char* value;
-    } VarValue;
-    
-    VarValue values[100];
-    int valueCount = 0;
-    int insideLoop = 0;  // Track if we're inside a loop
-    
     while (curr) {
         TACInstr* newInstr = NULL;
-        
-        // Detect loop boundaries
-        if (curr->op == TAC_LABEL) {
-            insideLoop = 1;  // Entering a loop
-        }
-        
-        switch(curr->op) {
-            case TAC_ADD: {
-                char* left = curr->arg1;
-                char* right = curr->arg2;
-                
-                // Look up values in propagation table (search from most recent)
-                // Skip lookup inside loops to avoid propagating stale values
-                if (!insideLoop) {
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, left) == 0) {
-                            left = values[i].value;
-                            break;
-                        }
-                    }
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, right) == 0) {
-                            right = values[i].value;
-                            break;
-                        }
-                    }
-                }
-                
-                // Constant folding (disable inside loops)
-                if (!insideLoop && isdigit(left[0]) && isdigit(right[0])) {
-                    int result = atoi(left) + atoi(right);
-                    char* resultStr = malloc(20);
-                    sprintf(resultStr, "%d", result);
-                    
-                    // Store for propagation
-                    values[valueCount].var = strdup(curr->result);
-                    values[valueCount].value = resultStr;
-                    valueCount++;
-                    
-                    newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
-                } else {
-                    newInstr = createTAC(TAC_ADD, left, right, curr->result);
-                }
-                break;
-            }
-            case TAC_MULTIPLY: {
-                char* left = curr->arg1;
-                char* right = curr->arg2;
+        TACInstr* nextCurr = curr->next;   /* default: advance by one */
 
-                if (!insideLoop) {
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, left) == 0) {
-                            left = values[i].value;
-                            break;
-                        }
-                    }
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, right) == 0) {
-                            right = values[i].value;
-                            break;
-                        }
-                    }
-                }
-
-                if (!insideLoop && isConst(left) && isConst(right)) {
-                    int result = atoi(left) * atoi(right);
-                    char* resultStr = malloc(20);
-
-                    sprintf(resultStr, "%d", result);
-
-                    values[valueCount].var = strdup(curr->result);
-                    values[valueCount].value = resultStr;
-                    valueCount++;
-
-                    newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
-                } else {
-                    newInstr = createTAC(TAC_MULTIPLY, left, right, curr->result);
-                }
-                break;
-            }
-            case TAC_ASSIGN: {
-                char* value = curr->arg1;
-                
-                // Look up value in propagation table (search from most recent)
-                if (!insideLoop) {
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, value) == 0) {
-                            value = values[i].value;
-                            break;
-                        }
-                    }
-                }
-                
-                // Store for propagation (disable inside loops)
-                if (!insideLoop) {
-                    values[valueCount].var = strdup(curr->result);
-                    values[valueCount].value = strdup(value);
-                    valueCount++;
-                }
-                
-                newInstr = createTAC(TAC_ASSIGN, value, NULL, curr->result);
-                break;
-            }
-            case TAC_PRINT: {
-                char* value = curr->arg1;
-                
-                // Look up value in propagation table
-                if (!insideLoop) {
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, value) == 0) {
-                            value = values[i].value;
-                            break;
-                        }
-                    }
-                }
-                
-                newInstr = createTAC(TAC_PRINT, value, NULL, NULL);
-                break;
-            }
-            
-            case TAC_SUBTRACT: {
-                char* left = curr->arg1;
-                char* right = curr->arg2;
-                if (!insideLoop) {
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, left) == 0) { left = values[i].value; break; }
-                    }
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, right) == 0) { right = values[i].value; break; }
-                    }
-                }
-                if (!insideLoop && isConst(left) && isConst(right)) {
-                    int result = atoi(left) - atoi(right);
-                    char* resultStr = malloc(20);
-                    sprintf(resultStr, "%d", result);
-                    values[valueCount].var = strdup(curr->result);
-                    values[valueCount].value = resultStr;
-                    valueCount++;
-                    newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
-                } else {
-                    newInstr = createTAC(TAC_SUBTRACT, left, right, curr->result);
-                }
-                break;
-            }
-            case TAC_DIVIDE: {
-                char* left = curr->arg1;
-                char* right = curr->arg2;
-                if (!insideLoop) {
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, left) == 0) { left = values[i].value; break; }
-                    }
-                    for (int i = valueCount - 1; i >= 0; i--) {
-                        if (strcmp(values[i].var, right) == 0) { right = values[i].value; break; }
-                    }
-                }
-                if (!insideLoop && isConst(left) && isConst(right) && atoi(right) != 0) {
-                    int result = atoi(left) / atoi(right);
-                    char* resultStr = malloc(20);
-                    sprintf(resultStr, "%d", result);
-                    values[valueCount].var = strdup(curr->result);
-                    values[valueCount].value = resultStr;
-                    valueCount++;
-                    newInstr = createTAC(TAC_ASSIGN, resultStr, NULL, curr->result);
-                } else {
-                    newInstr = createTAC(TAC_DIVIDE, left, right, curr->result);
-                }
-                break;
-            }
-            case TAC_FUNC_DEF:
-            case TAC_PARAM:
-            case TAC_FUNC_CALL:
-            case TAC_RETURN:
-            case TAC_ARG:
-            case TAC_DECL:
-            case TAC_ARRAY_DECL:
-            case TAC_ARRAY_WRITE:
-            case TAC_ARRAY_READ:
-            case TAC_BOUNDS_CHECK:
-            case TAC_DIV_CHECK:
-            case TAC_LABEL:
-            case TAC_GOTO:
-                // GOTO marks end of loop body - reset insideLoop flag
-                if (curr->op == TAC_GOTO) {
-                    insideLoop = 0;
-                }
-            case TAC_IF_FALSE:
-            case TAC_EQ:
-            case TAC_NE:
-            case TAC_LT:
-            case TAC_GT:
-            case TAC_LE:
-            case TAC_GE: {
-                // Preserve these instructions as-is
-                // TODO: Could add constant folding for comparisons in future
-                newInstr = createTAC(curr->op, curr->arg1, curr->arg2, curr->result);
-                break;
+        /* ── Label handling ─────────────────────────────────────────────────
+         * Loop-start labels (backward-jump targets): enter loop, invalidate.
+         * All other labels (if-else else-entry or merge points): also
+         * invalidate the prop table — variables assigned in one branch must
+         * not be propagated into another branch or past the merge point.
+         * ──────────────────────────────────────────────────────────────── */
+        if (curr->op == TAC_LABEL && curr->arg1) {
+            if (isLoopStartLabel(curr->arg1, loopStarts, nLoopStarts)) {
+                loopDepth++;
+                propCount = 0;   /* loop may mutate any variable */
+            } else if (loopDepth == 0) {
+                propCount = 0;   /* if-else merge/else-entry point */
             }
         }
-        
-        if (newInstr) {
-            appendOptimizedTAC(newInstr);
+
+        /* ── Is this a binary/relational op? Handle uniformly. ── */
+        int isBinop = (curr->op == TAC_ADD      || curr->op == TAC_SUBTRACT ||
+                       curr->op == TAC_MULTIPLY  || curr->op == TAC_DIVIDE   ||
+                       curr->op == TAC_EQ        || curr->op == TAC_NE       ||
+                       curr->op == TAC_LT        || curr->op == TAC_GT       ||
+                       curr->op == TAC_LE        || curr->op == TAC_GE);
+
+        if (isBinop) {
+            /* Copy propagation (only outside loops — inside loops variables
+             * may have been modified, so propagated values would be stale) */
+            const char* left  = curr->arg1;
+            const char* right = curr->arg2;
+            if (loopDepth == 0) {
+                left  = propLookup(left,  propTable, propCount);
+                right = propLookup(right, propTable, propCount);
+            }
+
+            /* Constant folding: if BOTH operands are numeric literals, fold.
+             * This is safe at ANY loop depth — constants never change. */
+            char foldBuf[32];
+            if (tryFoldBinop(curr->op, left, right, foldBuf, sizeof(foldBuf))) {
+                char* foldedVal = strdup(foldBuf);
+                /* Record in prop-table so downstream code can use it */
+                if (loopDepth == 0 && propCount < 256) {
+                    propTable[propCount].var   = strdup(curr->result);
+                    propTable[propCount].value = foldedVal;
+                    propCount++;
+                }
+                newInstr = createTAC(TAC_ASSIGN, foldedVal, NULL, curr->result);
+            } else {
+                /* Cannot fold — emit original op (with possibly substituted operands) */
+                newInstr = createTAC(curr->op,
+                                     (char*)left, (char*)right, curr->result);
+            }
         }
-        
-        curr = curr->next;
-    }
+        else switch (curr->op) {
+
+        /* ── Assignment ── */
+        case TAC_ASSIGN: {
+            const char* value = curr->arg1;
+            if (loopDepth == 0) {
+                value = propLookup(value, propTable, propCount);
+                if (propCount < 256) {
+                    propTable[propCount].var   = strdup(curr->result);
+                    propTable[propCount].value = strdup(value);
+                    propCount++;
+                }
+            }
+            newInstr = createTAC(TAC_ASSIGN, (char*)value, NULL, curr->result);
+            break;
+        }
+
+        /* ── Print ── */
+        case TAC_PRINT: {
+            const char* value = curr->arg1;
+            if (loopDepth == 0)
+                value = propLookup(value, propTable, propCount);
+            newInstr = createTAC(TAC_PRINT, (char*)value, NULL, NULL);
+            break;
+        }
+
+        /* ── Conditional jump (key optimization point) ── */
+        case TAC_IF_FALSE: {
+            const char* cond = curr->arg1;
+            /* Substitute through prop-table if possible */
+            if (loopDepth == 0)
+                cond = propLookup(cond, propTable, propCount);
+
+            if (isConst(cond)) {
+                int condVal = (int)atof(cond);
+                if (condVal != 0) {
+                    /* ────────────────────────────────────────────────
+                     * DEAD BRANCH ELIMINATION
+                     * Condition is always TRUE → branch never taken.
+                     * Remove IF_FALSE; loop runs without an exit check
+                     * (becomes infinite unless broken some other way).
+                     * The end label will be emitted but unreachable.
+                     * ──────────────────────────────────────────────── */
+                    fprintf(stderr,
+                        "\n⚡ Optimizer [dead-branch]: IF_FALSE %s GOTO %s"
+                        " → removed (branch never taken)\n\n",
+                        cond, curr->result);
+                    newInstr = NULL;   /* skip IF_FALSE instruction */
+                } else {
+                    /* ────────────────────────────────────────────────
+                     * CONDITION IS ALWAYS FALSE
+                     * Distinguish loop exit-check from if-else branch:
+                     *   • Loop (backward target): dead-loop → skip body.
+                     *   • If-else (forward target): replace IF_FALSE with
+                     *     GOTO so the then-body is never entered.  The
+                     *     then-body is still emitted but unreachable; the
+                     *     else-body (if any) executes correctly.
+                     * ──────────────────────────────────────────────── */
+                    const char* endLabel = curr->result;
+                    if (isLoopStartLabel(endLabel, loopStarts, nLoopStarts)) {
+                        /* Dead loop elimination */
+                        fprintf(stderr,
+                            "\n⚡ Optimizer [dead-loop]: condition always false"
+                            " — skipping loop body (target: %s)\n\n", endLabel);
+
+                        TACInstr* skip = curr->next;
+                        while (skip &&
+                               !(skip->op == TAC_LABEL && skip->arg1 &&
+                                 strcmp(skip->arg1, endLabel) == 0)) {
+                            /* While skipping, keep loopDepth consistent:
+                             * any back-edge GOTO we skip over would have
+                             * decremented loopDepth in the normal path. */
+                            if (skip->op == TAC_GOTO && skip->arg1 &&
+                                isLoopStartLabel(skip->arg1, loopStarts, nLoopStarts))
+                                if (loopDepth > 0) loopDepth--;
+                            skip = skip->next;
+                        }
+                        /* skip == endLabel node (or NULL); advance past it */
+                        nextCurr = skip ? skip->next : NULL;
+                        newInstr  = NULL;
+                    } else {
+                        /* if (0): forward branch, always false → unconditional
+                         * jump to the else/end label so the then-body is
+                         * bypassed.  The then-body remains in the output as
+                         * dead code but does not affect correctness. */
+                        fprintf(stderr,
+                            "\n⚡ Optimizer [if(0)]: condition always false"
+                            " → replacing with GOTO %s\n\n", endLabel);
+                        newInstr = createTAC(TAC_GOTO, (char*)endLabel, NULL, NULL);
+                    }
+                }
+            } else {
+                /* Condition is a runtime value — keep IF_FALSE as-is */
+                newInstr = createTAC(TAC_IF_FALSE,
+                                     (char*)cond, NULL, curr->result);
+            }
+            break;
+        }
+
+        /* ── Unconditional jump (back-edge) ── */
+        case TAC_GOTO: {
+            /* Leaving the innermost loop if this is a back-edge */
+            if (curr->arg1 &&
+                isLoopStartLabel(curr->arg1, loopStarts, nLoopStarts))
+                if (loopDepth > 0) loopDepth--;
+            newInstr = createTAC(TAC_GOTO, curr->arg1, NULL, NULL);
+            break;
+        }
+
+        /* ── Function boundary: reset state ── */
+        case TAC_FUNC_DEF:
+            loopDepth = 0;
+            propCount = 0;
+            newInstr = createTAC(curr->op, curr->arg1, curr->arg2, curr->result);
+            break;
+
+        /* ── All other instructions: pass through unchanged ── */
+        case TAC_PARAM:
+        case TAC_FUNC_CALL:
+        case TAC_RETURN:
+        case TAC_ARG:
+        case TAC_DECL:
+        case TAC_ARRAY_DECL:
+        case TAC_ARRAY_WRITE:
+        case TAC_ARRAY_READ:
+        case TAC_BOUNDS_CHECK:
+        case TAC_DIV_CHECK:
+        case TAC_LABEL:
+        default:
+            newInstr = createTAC(curr->op, curr->arg1, curr->arg2, curr->result);
+            break;
+        } /* end switch */
+
+        if (newInstr) appendOptimizedTAC(newInstr);
+        curr = nextCurr;
+    } /* end while */
 }
 
 /* ─── MIPS Code Generation Helpers ─── */

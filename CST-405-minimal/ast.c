@@ -361,6 +361,21 @@ void printAST(ASTNode* node, int level) {
             printf("Body:\n");
             printAST(node->data.for_loop.body, level + 2);
             break;
+        case NODE_IF:
+            printf("IF%s\n",
+                   node->data.if_stmt.else_stmt ? " (with else)" : " (no else)");
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("CONDITION:\n");
+            printAST(node->data.if_stmt.condition, level + 2);
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("THEN:\n");
+            printAST(node->data.if_stmt.then_stmt, level + 2);
+            if (node->data.if_stmt.else_stmt) {
+                for (int i = 0; i < level + 1; i++) printf("  ");
+                printf("ELSE:\n");
+                printAST(node->data.if_stmt.else_stmt, level + 2);
+            }
+            break;
         default:
             printf("UNKNOWN NODE TYPE: %d\n", node->type);
             break;
@@ -478,5 +493,16 @@ ASTNode* createFor(ASTNode* init, ASTNode* condition, ASTNode* update, ASTNode* 
     node->data.for_loop.condition = condition; /* NULL = always true */
     node->data.for_loop.update    = update;    /* NULL if omitted */
     node->data.for_loop.body      = body;
+    return node;
+}
+
+/* Create an if-statement node.
+ * else_stmt is NULL when there is no else clause. */
+ASTNode* createIf(ASTNode* condition, ASTNode* then_stmt, ASTNode* else_stmt) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_IF;
+    node->data.if_stmt.condition = condition;
+    node->data.if_stmt.then_stmt = then_stmt;
+    node->data.if_stmt.else_stmt = else_stmt;  /* NULL = no else */
     return node;
 }

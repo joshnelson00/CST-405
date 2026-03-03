@@ -1,0 +1,11 @@
+Optimized TAC Instructions:
+─────────────────────────────
+ 1: FUNC main          // Function definition
+ 2: DECL x           // Declare variable
+ 3: DECL y           // Declare variable
+ 4: x = 5           // Assignment
+ 5: t0 = 1           // Assignment
+ 6: PRINT 1          // Output value
+L0:                          // Loop label
+ 7: PRINT "
+"          // Output value

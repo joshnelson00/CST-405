@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 3 Activity — For-Loop: Optimizer, Code Generator &amp; Performance Metrics</title>
+<style>
+  :root {
+    --bg:       #0f1117;
+    --surface:  #1a1d27;
+    --surface2: #22263a;
+    --border:   #2e3350;
+    --accent:   #4f8ef7;
+    --green:    #34d399;
+    --yellow:   #fbbf24;
+    --red:      #f87171;
+    --purple:   #a78bfa;
+    --orange:   #fb923c;
+    --teal:     #2dd4bf;
+    --text:     #e2e8f0;
+    --muted:    #8892a4;
+    --code-bg:  #141722;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; font-size: 15px; }
+
+  /* NAV */
+  nav { position: sticky; top: 0; z-index: 100; background: rgba(15,17,23,0.93); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; gap: 1rem; height: 52px; }
+  nav .logo { font-weight: 700; color: var(--teal); font-size: .9rem; white-space: nowrap; }
+  nav .day-badge { background: var(--teal); color: #0f1117; border-radius: 6px; padding: 3px 10px; font-size: .75rem; font-weight: 700; }
+  nav .time { margin-left: auto; color: var(--muted); font-size: .8rem; }
+
+  /* LAYOUT */
+  .page { max-width: 860px; margin: 0 auto; padding: 2rem 2rem 6rem; }
+
+  /* HERO */
+  .hero { border-bottom: 1px solid var(--border); padding-bottom: 2rem; margin-bottom: 2.5rem; }
+  .hero-meta { display: flex; align-items: center; gap: .8rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 5px; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .tag-day3  { background: rgba(45,212,191,.15); color: var(--teal);   border: 1px solid rgba(45,212,191,.3); }
+  .tag-75    { background: rgba(251,191,36,.12);  color: var(--yellow); border: 1px solid rgba(251,191,36,.3); }
+  .tag-back  { background: rgba(52,211,153,.12);  color: var(--green);  border: 1px solid rgba(52,211,153,.3); }
+  .tag-perf  { background: rgba(167,139,250,.12); color: var(--purple); border: 1px solid rgba(167,139,250,.3); }
+  .hero h1 { font-size: 1.8rem; font-weight: 800; line-height: 1.2; margin-bottom: .6rem; }
+  .hero h1 span { color: var(--teal); }
+  .hero p { color: var(--muted); max-width: 640px; }
+
+  /* STATUS BANNER */
+  .status-banner { display: flex; align-items: flex-start; gap: .8rem; background: rgba(45,212,191,.07); border: 1px solid rgba(45,212,191,.22); border-radius: 10px; padding: 1rem 1.3rem; margin-bottom: 2rem; font-size: .9rem; }
+  .status-banner .icon { font-size: 1.3rem; flex-shrink: 0; }
+
+  /* OBJECTIVES */
+  .objectives { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem 1.5rem; margin-bottom: 2rem; }
+  .objectives h3 { font-size: .85rem; text-transform: uppercase; letter-spacing: .07em; color: var(--teal); margin-bottom: .8rem; }
+  .obj-list { list-style: none; padding: 0; }
+  .obj-list li { padding: .3rem 0; display: flex; align-items: flex-start; gap: .6rem; font-size: .9rem; }
+  .obj-list li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+
+  /* TIMELINE */
+  .timeline { display: flex; gap: 0; margin-bottom: 2.5rem; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .tl-item { flex: 1; padding: .7rem .4rem; text-align: center; border-right: 1px solid var(--border); font-size: .73rem; }
+  .tl-item:last-child { border-right: none; }
+  .tl-item .tl-time { font-weight: 700; color: var(--teal); display: block; font-size: .78rem; }
+  .tl-item .tl-label { color: var(--muted); }
+
+  /* PART HEADERS */
+  .part { margin-bottom: 3rem; }
+  .part-header { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 10px 10px 0 0; border-bottom: 2px solid var(--teal); }
+  .part-num { background: var(--teal); color: #0f1117; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .9rem; flex-shrink: 0; }
+  .part-title { font-size: 1.1rem; font-weight: 700; }
+  .part-time { margin-left: auto; color: var(--yellow); font-size: .8rem; font-weight: 600; background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.2); border-radius: 5px; padding: 2px 9px; }
+  .part-body { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 10px 10px; padding: 1.5rem; }
+
+  /* TASKS */
+  .task { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 1.2rem; overflow: hidden; }
+  .task-head { display: flex; align-items: center; gap: .8rem; padding: .7rem 1rem; background: var(--surface2); }
+  .task-num { background: var(--border); color: var(--text); border-radius: 5px; padding: 1px 8px; font-size: .75rem; font-weight: 700; font-family: monospace; }
+  .task-title { font-weight: 600; font-size: .92rem; }
+  .task-file { margin-left: auto; font-family: monospace; font-size: .75rem; color: var(--muted); background: var(--code-bg); padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); }
+  .task-body { padding: 1rem 1.2rem; font-size: .9rem; }
+  .task-body p { margin-bottom: .7rem; }
+
+  /* CODE */
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 7px; padding: .9rem 1.1rem; overflow-x: auto; font-family: 'Cascadia Code','Fira Code','Consolas',monospace; font-size: .8rem; line-height: 1.65; margin: .7rem 0 .9rem; }
+  .kw  { color: #c792ea; }
+  .cmt { color: #546e7a; font-style: italic; }
+  .num { color: #f78c6c; }
+  .fn  { color: #82aaff; }
+  .lbl { color: var(--yellow); }
+  .op-fold   { color: var(--green);  }
+  .op-copy   { color: var(--teal);   }
+  .op-dead   { color: var(--red);    text-decoration: line-through; }
+  .op-keep   { color: var(--text);   }
+
+  /* CALLOUTS */
+  .callout { border-left: 3px solid var(--accent); background: rgba(79,142,247,.07); border-radius: 0 7px 7px 0; padding: .8rem 1.1rem; margin: .8rem 0; font-size: .88rem; }
+  .callout.warn   { border-color: var(--yellow); background: rgba(251,191,36,.07); }
+  .callout.tip    { border-color: var(--green);  background: rgba(52,211,153,.07); }
+  .callout.stop   { border-color: var(--red);    background: rgba(248,113,113,.07); }
+  .callout.teal   { border-color: var(--teal);   background: rgba(45,212,191,.06); }
+  .callout.purple { border-color: var(--purple); background: rgba(167,139,250,.07); }
+  .callout strong { display: block; margin-bottom: .3rem; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+  .callout.warn   strong { color: var(--yellow); }
+  .callout.tip    strong { color: var(--green);  }
+  .callout.stop   strong { color: var(--red);    }
+  .callout.teal   strong { color: var(--teal);   }
+  .callout.purple strong { color: var(--purple); }
+  .callout        strong { color: var(--accent); }
+
+  /* METRICS TABLE */
+  .metrics-table { width: 100%; border-collapse: collapse; font-size: .82rem; margin: .8rem 0; }
+  .metrics-table th { background: var(--surface2); padding: .5rem .8rem; border: 1px solid var(--border); color: var(--muted); text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+  .metrics-table td { padding: .45rem .8rem; border: 1px solid var(--border); font-family: monospace; font-size: .8rem; }
+  .metrics-table .prog-col { color: var(--teal); font-family: inherit; font-size: .85rem; font-weight: 600; }
+  .metrics-table .fill { background: rgba(45,212,191,.03); }
+  .metrics-table tfoot td { background: var(--surface2); font-weight: 700; font-family: inherit; font-size: .8rem; color: var(--yellow); }
+
+  /* SIDE-BY-SIDE */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: .8rem 0; }
+  .compare-box { background: var(--code-bg); border: 1px solid var(--border); border-radius: 7px; padding: .7rem 1rem; }
+  .compare-box h5 { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .6rem; }
+  .compare-box.unopt h5 { color: var(--red); }
+  .compare-box.opt   h5 { color: var(--green); }
+  .compare-box pre  { border: none; background: none; padding: 0; margin: 0; }
+
+  /* REPORT BOX */
+  .report-box { border: 1px solid rgba(167,139,250,.3); border-radius: 10px; background: rgba(167,139,250,.05); padding: 1.2rem 1.5rem; margin: 1.2rem 0; }
+  .report-box h4 { color: var(--purple); font-size: .85rem; text-transform: uppercase; letter-spacing: .07em; margin-bottom: .8rem; }
+  .report-section { border-top: 1px solid var(--border); padding-top: .7rem; margin-top: .7rem; font-size: .88rem; }
+  .report-section h5 { font-size: .8rem; color: var(--teal); margin-bottom: .4rem; }
+
+  /* CHECKPOINT */
+  .checkpoint { background: rgba(52,211,153,.07); border: 1px solid rgba(52,211,153,.25); border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1.5rem 0; }
+  .checkpoint h3 { color: var(--green); font-size: .85rem; text-transform: uppercase; letter-spacing: .07em; margin-bottom: .8rem; }
+
+  /* FINAL CHECKPOINT */
+  .final-checkpoint { background: rgba(45,212,191,.06); border: 2px solid rgba(45,212,191,.28); border-radius: 12px; padding: 1.5rem 1.8rem; margin: 2rem 0; }
+  .final-checkpoint h3 { color: var(--teal); font-size: 1rem; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 1rem; }
+  .final-checkpoint ul { padding-left: 1.2rem; }
+  .final-checkpoint li { margin-bottom: .5rem; font-size: .9rem; }
+
+  /* QUESTIONS */
+  .questions { background: rgba(167,139,250,.06); border: 1px solid rgba(167,139,250,.2); border-radius: 8px; padding: 1rem 1.3rem; margin: 1rem 0; }
+  .questions h4 { color: var(--purple); font-size: .82rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .7rem; }
+  .questions ol { padding-left: 1.2rem; font-size: .9rem; }
+  .questions li { margin-bottom: .5rem; }
+
+  .answer-area { border: 1px dashed var(--border); border-radius: 6px; padding: .6rem 1rem; min-height: 55px; margin: .4rem 0; background: rgba(255,255,255,.01); color: var(--muted); font-size: .8rem; font-style: italic; }
+
+  /* METRIC BADGE */
+  .metric-def { display: inline-flex; align-items: center; gap: .4rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 2px 9px; font-size: .78rem; margin: .2rem; }
+  .metric-def .m-name { color: var(--teal); font-weight: 700; font-family: monospace; }
+  .metric-def .m-desc { color: var(--muted); }
+
+  h3 { font-size: .97rem; font-weight: 700; color: var(--purple); margin: 1.2rem 0 .5rem; }
+  p  { margin-bottom: .7rem; }
+  ul, ol { padding-left: 1.4rem; margin-bottom: .7rem; }
+  li { margin-bottom: .3rem; }
+  code { font-family: 'Cascadia Code','Fira Code','Consolas',monospace; font-size: .85em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">CST-405 — Compiler Design</span>
+  <span class="day-badge">Day 3 of 3</span>
+  <span class="time">75 minutes</span>
+</nav>
+
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-meta">
+      <span class="tag tag-day3">Session 3</span>
+      <span class="tag tag-75">75 min</span>
+      <span class="tag tag-back">Backend Phases</span>
+      <span class="tag tag-perf">Performance Metrics</span>
+    </div>
+    <h1>Adding <span>For-Loop</span> Support<br>Part 3: Optimizer, Code Generator &amp; Performance Metrics</h1>
+    <p>In this final session you will analyze the optimizer's transformations on for-loop TAC, verify the code generator's output, measure concrete performance metrics across multiple test programs, and produce a written analysis documenting your findings.</p>
+  </div>
+
+  <!-- STATUS -->
+  <div class="status-banner">
+    <span class="icon">📋</span>
+    <div>
+      <strong>Day 2 Prerequisite:</strong> Your compiler must fully compile a for-loop to MIPS assembly — all five Day 2 test programs must pass. The optimizer and code generator should already be in place; today you analyze them deeply and measure their effect. If Day 2 is incomplete, resolve it before proceeding.
+    </div>
+  </div>
+
+  <!-- OBJECTIVES -->
+  <div class="objectives">
+    <h3>Learning Objectives — Day 3</h3>
+    <ul class="obj-list">
+      <li>Identify which optimizer transformations apply to for-loop TAC and trace them step by step</li>
+      <li>Measure the reduction in TAC instruction count produced by each optimization technique</li>
+      <li>Map TAC instructions to MIPS assembly instructions and count loop-control overhead</li>
+      <li>Compare unoptimized and optimized MIPS output for instruction count and register usage</li>
+      <li>Define and collect five performance metrics across three test programs</li>
+      <li>Produce a written performance analysis report with quantitative data and conclusions</li>
+    </ul>
+  </div>
+
+  <!-- TIMELINE -->
+  <div class="timeline">
+    <div class="tl-item"><span class="tl-time">0–10</span><span class="tl-label">Day 2 Review</span></div>
+    <div class="tl-item"><span class="tl-time">10–30</span><span class="tl-label">Part 1: Optimizer</span></div>
+    <div class="tl-item"><span class="tl-time">30–50</span><span class="tl-label">Part 2: Code Gen</span></div>
+    <div class="tl-item"><span class="tl-time">50–75</span><span class="tl-label">Part 3: Metrics</span></div>
+  </div>
+
+
+  <!-- WARM-UP -->
+  <div class="part">
+    <div class="part-header">
+      <div class="part-num">0</div>
+      <div class="part-title">Warm-Up — Day 2 Review &amp; Optimizer Prerequisites</div>
+      <span class="part-time">10 min</span>
+    </div>
+    <div class="part-body">
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">0.1</span>
+          <span class="task-title">Confirm Day 2 is fully working</span>
+        </div>
+        <div class="task-body">
+          <p>Run your Day 2 test file (the sum loop, <code>test_for_day1.c</code>) through the compiler. Confirm that the <code>.s</code> file is generated without errors and that execution in a MIPS simulator produces the expected output. Record the exact output value here:</p>
+          <div class="answer-area">Expected output: 45 &nbsp;&nbsp; Actual output from simulator: &nbsp;&nbsp; Pass / Fail:</div>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">0.2</span>
+          <span class="task-title">Locate the optimizer in tac.c</span>
+          <span class="task-file">tac.c</span>
+        </div>
+        <div class="task-body">
+          <p>Open <code>tac.c</code> and search for the function that performs TAC optimization — it will be named something like <code>optimizeTAC()</code>. Read through it in its entirety without modifying it. Identify and list the optimization techniques it implements by name. For each technique, note the TAC instruction type(s) it targets:</p>
+          <div class="answer-area">Optimization techniques found (name → TAC instruction type(s) targeted):</div>
+
+          <div class="questions">
+            <h4>Before You Begin the Analysis</h4>
+            <ol>
+              <li>Does the optimizer run on a single pass over the instruction list, or multiple passes? How can you tell from the code structure?</li>
+              <li>When the optimizer removes a TAC instruction (e.g., a dead branch), does it free the memory for that instruction? What does this suggest about the compiler's memory management strategy?</li>
+              <li>The optimizer is called after TAC generation but before code generation. Could it instead be applied after code generation (i.e., as a MIPS peephole optimizer)? What would be the trade-off?</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">0.3</span>
+          <span class="task-title">Examine the unoptimized TAC output for your Day 2 test program</span>
+        </div>
+        <div class="task-body">
+          <p>Compile <code>test_for_day1.c</code> and open the generated <code>.tac</code> file (or the TAC section of the compiler's console output). Count the total number of TAC instructions emitted for the for-loop construct — from the init assignment through and including the end label. Write the count here:</p>
+          <div class="answer-area">Total TAC instructions for the for-loop (before optimization): &nbsp;&nbsp; (of which, loop control instructions — labels, GOTO, IF_FALSE — : )</div>
+          <p>This baseline count is your reference point for measuring optimizer effectiveness in Part 1.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- PART 1: OPTIMIZER -->
+  <div class="part">
+    <div class="part-header">
+      <div class="part-num">1</div>
+      <div class="part-title">Part 1 — Optimizer: Transforming For-Loop TAC</div>
+      <span class="part-time">20 min</span>
+    </div>
+    <div class="part-body">
+
+      <p>The optimizer transforms the TAC instruction list before it reaches the code generator. It works entirely at the TAC level, which means its improvements benefit <em>any</em> target architecture — the MIPS code generator automatically inherits the benefits without any changes to <code>codegen.c</code>.</p>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">1.1</span>
+          <span class="task-title">Trace constant folding through a for-loop header</span>
+          <span class="task-file">tac.c</span>
+        </div>
+        <div class="task-body">
+          <p>Write and compile the following test program:</p>
+          <pre><code><span class="kw">int</span> <span class="fn">main</span>() {
+    <span class="kw">int</span> i<span class="cmt">;</span>
+    <span class="kw">int</span> result<span class="cmt">;</span>
+    result <span class="cmt">=</span> <span class="num">0</span><span class="cmt">;</span>
+    <span class="kw">for</span> (i <span class="cmt">=</span> <span class="num">2</span> <span class="cmt">+</span> <span class="num">3</span><span class="cmt">;</span> i <span class="cmt">&lt;=</span> <span class="num">4</span> <span class="cmt">*</span> <span class="num">5</span><span class="cmt">;</span> i <span class="cmt">=</span> i <span class="cmt">+</span> <span class="num">1</span>) {
+        result <span class="cmt">=</span> result <span class="cmt">+</span> i<span class="cmt">;</span>
+    }
+    <span class="fn">print</span>(result)<span class="cmt">;</span>
+}</code></pre>
+
+          <p>The init uses <code>2 + 3</code> and the condition upper bound uses <code>4 * 5</code> — both are constant expressions. Examine the TAC output before and after optimization. Fill in the table:</p>
+
+          <div class="compare">
+            <div class="compare-box unopt">
+              <h5>Unoptimized TAC (init)</h5>
+              <pre><code><span class="cmt">// What TAC instructions appear
+// for the init expression 2 + 3?
+// Write them here:</span></code></pre>
+            </div>
+            <div class="compare-box opt">
+              <h5>After Constant Folding</h5>
+              <pre><code><span class="cmt">// What does the optimizer
+// reduce the init TAC to?
+// Write the result here:</span></code></pre>
+            </div>
+          </div>
+
+          <div class="questions">
+            <h4>Analysis</h4>
+            <ol>
+              <li>Constant folding eliminates the temporary variable used to hold the intermediate result. How many TAC instructions are removed from the init expression alone?</li>
+              <li>The condition <code>i &lt;= 4 * 5</code> is evaluated on <em>every iteration</em>. Does constant folding reduce the per-iteration work? Explain why or why not — consider where the <code>4 * 5</code> computation appears in the TAC relative to the loop start label.</li>
+              <li>Is there any risk that constant folding could change the program's observable behavior? Under what conditions would it be unsafe?</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">1.2</span>
+          <span class="task-title">Test dead branch and dead loop elimination</span>
+          <span class="task-file">tac.c</span>
+        </div>
+        <div class="task-body">
+          <p>Write two targeted test programs to observe the optimizer's dead code removal:</p>
+          <ul>
+            <li><strong>Dead branch test:</strong> <code>for (i = 0; 1; i = i + 1)</code> — a constant-true condition. Compile it and examine whether the optimizer removes the <code>TAC_IF_FALSE</code> instruction. How many instructions does this save per iteration?</li>
+            <li><strong>Dead loop test:</strong> <code>for (i = 0; 0; i = i + 1)</code> — a constant-false condition. Compile it and examine whether the optimizer eliminates the entire loop body. What is left in the TAC output?</li>
+          </ul>
+          <div class="answer-area">Dead branch result — instructions removed: &nbsp; | &nbsp; Dead loop result — what remains in TAC output:</div>
+
+          <div class="callout teal">
+            <strong>Optimizer Behavior Insight</strong>
+            When a <code>TAC_IF_FALSE</code> condition is the constant <code>0</code>, the branch is always taken — the entire loop body and update are dead code. When the condition is non-zero (always true), the branch is never taken — the <code>TAC_IF_FALSE</code> itself is dead. Verify that your compiler implements both behaviors by examining the TAC output carefully.
+          </div>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">1.3</span>
+          <span class="task-title">Copy propagation through the loop update</span>
+          <span class="task-file">tac.c</span>
+        </div>
+        <div class="task-body">
+          <p>Compile the standard counted loop from Day 1 and find the TAC generated for the update step (<code>i = i + 1</code>). Before optimization, this expression may generate a temporary variable:</p>
+          <pre><code><span class="lbl">t3</span> <span class="cmt">= i + 1</span>
+<span class="lbl">i</span>  <span class="cmt">= t3</span></code></pre>
+          <p>After copy propagation, if <code>t3</code> is used only in the assignment to <code>i</code>, the intermediate temporary may be eliminated. Check whether your optimizer applies copy propagation to the update step. Write the before and after TAC for the update here:</p>
+          <div class="answer-area">Update TAC before optimization: &nbsp;&nbsp; | &nbsp;&nbsp; After optimization:</div>
+          <p>If copy propagation does not fire on the update, explain why based on your reading of the optimizer code. Is the update assignment structure different from the cases the optimizer handles?</p>
+        </div>
+      </div>
+
+      <div class="checkpoint">
+        <h3>✓ Optimizer Checkpoint</h3>
+        <p>Before moving to Part 2, record your baseline optimization metrics in the table in Part 3 (Task 3.1). You will need: the unoptimized TAC instruction count, the optimized TAC instruction count, and which techniques fired for your Day 1 test program. Collect these numbers now.</p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- PART 2: CODE GEN -->
+  <div class="part">
+    <div class="part-header">
+      <div class="part-num">2</div>
+      <div class="part-title">Part 2 — Code Generator: MIPS Output Analysis</div>
+      <span class="part-time">20 min</span>
+    </div>
+    <div class="part-body">
+
+      <p>The code generator translates the (possibly optimized) TAC instruction list to MIPS assembly. You will verify the complete TAC-to-MIPS mapping for a for-loop, analyze register usage, and compare the MIPS output produced from unoptimized vs. optimized TAC.</p>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">2.1</span>
+          <span class="task-title">Map every for-loop TAC type to its MIPS translation</span>
+          <span class="task-file">codegen.c</span>
+        </div>
+        <div class="task-body">
+          <p>Open <code>codegen.c</code> and find <code>generateMIPSFromTAC()</code>. A for-loop emits the following TAC instruction types: <code>TAC_ASSIGN</code>, <code>TAC_BINOP</code>, <code>TAC_LABEL</code>, <code>TAC_IF_FALSE</code>, <code>TAC_GOTO</code>, and <code>TAC_PRINT</code>. For each type, find its corresponding case and complete the mapping:</p>
+
+          <table class="metrics-table">
+            <thead>
+              <tr><th>TAC Type</th><th>Primary MIPS instruction(s) emitted</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>TAC_LABEL</code></td><td class="fill"></td><td class="fill"></td></tr>
+              <tr><td><code>TAC_IF_FALSE</code></td><td class="fill"></td><td class="fill"></td></tr>
+              <tr><td><code>TAC_GOTO</code></td><td class="fill"></td><td class="fill"></td></tr>
+              <tr><td><code>TAC_ASSIGN</code></td><td class="fill"></td><td class="fill"></td></tr>
+              <tr><td><code>TAC_BINOP</code> (arithmetic)</td><td class="fill"></td><td class="fill"></td></tr>
+              <tr><td><code>TAC_BINOP</code> (relational, e.g. LE)</td><td class="fill"></td><td class="fill"></td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout tip">
+            <strong>Architecture Insight</strong>
+            There is no <code>case NODE_FOR</code> anywhere in <code>codegen.c</code>. This is intentional: the code generator operates on the TAC list, not the AST. By the time the code generator runs, the for-loop has already been fully lowered to labels and jumps. This separation is what allows the code generator to target a different architecture without any knowledge of for-loops.
+          </div>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">2.2</span>
+          <span class="task-title">Annotate the MIPS output for the Day 1 test program</span>
+        </div>
+        <div class="task-body">
+          <p>Open the <code>.s</code> file generated for your Day 1 test program. Find the section corresponding to the for-loop. On paper (or in a printed copy), annotate each MIPS instruction with the TAC instruction it was generated from. Then answer:</p>
+
+          <div class="questions">
+            <h4>Analysis Questions</h4>
+            <ol>
+              <li>Count the MIPS instructions dedicated exclusively to loop control — the label declarations, the branch, and the unconditional jump. How many are there? How many instructions does the loop body take?</li>
+              <li>Look at how the loop variable <code>i</code> is stored and loaded. Is <code>i</code> loaded from the stack before every use, or is it kept in a register across iterations? What does this tell you about the compiler's register allocation strategy?</li>
+              <li>The <code>sle</code> instruction (set-less-or-equal) is a pseudo-instruction. What does it expand to in actual MIPS hardware instructions? How does this affect your instruction count for the condition check?</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">2.3</span>
+          <span class="task-title">Compare unoptimized vs. optimized MIPS for the constant-expression loop</span>
+        </div>
+        <div class="task-body">
+          <p>Take the constant-expression test program from Task 1.1 (<code>for (i = 2+3; i &lt;= 4*5; ...)</code>). Compile it twice — once with the optimizer disabled (if your compiler has a flag for this; if not, temporarily comment out the optimizer call in <code>main.c</code>) and once normally. Open both <code>.s</code> files and compare the init section.</p>
+
+          <div class="compare">
+            <div class="compare-box unopt">
+              <h5>Without Optimization</h5>
+              <pre><code><span class="cmt">// Copy the MIPS instructions
+// for the init section here
+// (loading and computing 2+3)</span></code></pre>
+            </div>
+            <div class="compare-box opt">
+              <h5>With Constant Folding</h5>
+              <pre><code><span class="cmt">// Copy the optimized MIPS
+// instructions for the init
+// section here</span></code></pre>
+            </div>
+          </div>
+
+          <p>Count the total MIPS instructions in the init section for each version. Record the counts — you will enter them into the performance metrics table in Part 3.</p>
+          <div class="answer-area">Unoptimized init MIPS instruction count: &nbsp;&nbsp; | &nbsp;&nbsp; Optimized init MIPS instruction count: &nbsp;&nbsp; | &nbsp;&nbsp; Reduction: &nbsp;%</div>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">2.4</span>
+          <span class="task-title">Register spill analysis for a nested for-loop</span>
+        </div>
+        <div class="task-body">
+          <p>Compile the nested for-loop test from Day 2 (two nested loops with variables <code>i</code>, <code>j</code>, and <code>product</code>). Open the <code>.s</code> file and answer:</p>
+          <ul>
+            <li>How many distinct registers are in use at the innermost point of the loop (the line that computes <code>product = i * j</code>)?</li>
+            <li>Does the compiler spill any registers to the stack during the inner loop body? Look for <code>sw</code> (store word) instructions that write a temporary register to a stack offset.</li>
+            <li>How many <code>lw</code> (load word) instructions appear in the inner loop body? Each one represents a reload of a value from the stack — this is the cost of register spilling.</li>
+          </ul>
+          <div class="answer-area">Register count at innermost point: &nbsp;&nbsp; | &nbsp;&nbsp; Spill count (sw instructions for temps): &nbsp;&nbsp; | &nbsp;&nbsp; Reload count (lw in inner body):</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- PART 3: PERFORMANCE METRICS -->
+  <div class="part">
+    <div class="part-header">
+      <div class="part-num">3</div>
+      <div class="part-title">Part 3 — Performance Metrics: Measuring Compiler Effectiveness</div>
+      <span class="part-time">25 min</span>
+    </div>
+    <div class="part-body">
+
+      <p>Performance analysis transforms qualitative observations ("the optimizer makes the code faster") into quantitative claims ("the optimizer reduces instruction count by 23% for constant-expression loops"). You will define metrics, collect them systematically across three test programs, and write a short analysis report.</p>
+
+      <h3>Metric Definitions</h3>
+      <p>You will collect the following five metrics for each test program. Study these definitions before collecting data:</p>
+
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin:.8rem 0 1.2rem;">
+        <div class="metric-def"><span class="m-name">TAC_UNOPT</span><span class="m-desc">Total TAC instructions before optimization</span></div>
+        <div class="metric-def"><span class="m-name">TAC_OPT</span><span class="m-desc">Total TAC instructions after optimization</span></div>
+        <div class="metric-def"><span class="m-name">MIPS_TOTAL</span><span class="m-desc">Total MIPS instructions in the generated <code>.s</code> file (exclude <code>.data</code>, directives, and syscall overhead)</span></div>
+        <div class="metric-def"><span class="m-name">LOOP_OH</span><span class="m-desc">Loop overhead — MIPS instructions for control flow only (labels + branch + jump), not counting the body</span></div>
+        <div class="metric-def"><span class="m-name">SPILL</span><span class="m-desc">Register spill count — number of <code>sw</code> instructions in the loop body that write a temporary register to the stack</span></div>
+      </div>
+
+      <div class="callout warn">
+        <strong>Counting Instructions Precisely</strong>
+        When counting MIPS instructions, count each assembly directive on its own line as one instruction. Pseudo-instructions like <code>li</code>, <code>move</code>, and <code>sle</code> each count as one instruction even though they expand to multiple hardware instructions. Be consistent across all three programs so your comparisons are meaningful.
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">3.1</span>
+          <span class="task-title">Collect metrics for three test programs</span>
+        </div>
+        <div class="task-body">
+          <p>Compile each of the three programs below and collect all five metrics. Write the programs yourself — they should not be identical to your Day 1/2 test files.</p>
+
+          <ul>
+            <li><strong>Program A — Simple counted loop:</strong> A single for-loop from 1 to N (choose N=10) accumulating a sum.</li>
+            <li><strong>Program B — Nested for-loops:</strong> Two nested for-loops computing a sum of products (e.g., <code>i*j</code> for all pairs in a 3×3 range).</li>
+            <li><strong>Program C — Constant-expression loop:</strong> A for-loop where the init and/or condition bound contains a constant arithmetic expression (e.g., <code>i = 1+1</code> or <code>i &lt;= 2*5</code>), so that constant folding applies.</li>
+          </ul>
+
+          <table class="metrics-table">
+            <thead>
+              <tr>
+                <th>Program</th>
+                <th>TAC_UNOPT</th>
+                <th>TAC_OPT</th>
+                <th>TAC reduction %</th>
+                <th>MIPS_TOTAL</th>
+                <th>LOOP_OH</th>
+                <th>SPILL</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="prog-col">A — Simple loop</td>
+                <td class="fill"></td><td class="fill"></td><td class="fill"></td>
+                <td class="fill"></td><td class="fill"></td><td class="fill"></td>
+              </tr>
+              <tr>
+                <td class="prog-col">B — Nested loops</td>
+                <td class="fill"></td><td class="fill"></td><td class="fill"></td>
+                <td class="fill"></td><td class="fill"></td><td class="fill"></td>
+              </tr>
+              <tr>
+                <td class="prog-col">C — Constant exprs</td>
+                <td class="fill"></td><td class="fill"></td><td class="fill"></td>
+                <td class="fill"></td><td class="fill"></td><td class="fill"></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Average</td>
+                <td></td><td></td><td></td><td></td><td></td><td></td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <p>To compute TAC_UNOPT for your compiler, you may need to temporarily add a print step before the optimizer runs, or count instructions by reading the output carefully. If your compiler prints both unoptimized and optimized TAC, use those numbers directly.</p>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">3.2</span>
+          <span class="task-title">Analyze the data — patterns and anomalies</span>
+        </div>
+        <div class="task-body">
+          <p>With all three rows filled in, answer the following analysis questions before writing the report:</p>
+
+          <div class="questions">
+            <h4>Quantitative Analysis</h4>
+            <ol>
+              <li>Which program shows the largest TAC reduction percentage? Why does that program benefit most from optimization?</li>
+              <li>For Program B (nested loops), how does LOOP_OH compare to Program A? Express this as a ratio. Is the overhead proportional to the nesting depth, or does it grow differently?</li>
+              <li>For Program C, the optimizer should reduce the constant-expression computation in the init. Does this appear in the MIPS_TOTAL count? If the TAC_OPT number is lower but MIPS_TOTAL is not proportionally lower, what might explain the discrepancy?</li>
+              <li>SPILL for Program B is likely higher than for Program A. Is this because the inner loop has more live variables, or because the total number of instructions is larger? How would you distinguish these two causes by examining the MIPS output?</li>
+              <li>Loop overhead (LOOP_OH) represents instructions that exist purely to implement the loop control structure, not the computation itself. For Program A, what percentage of MIPS_TOTAL does loop overhead represent? Is this acceptable, or does it suggest a potential optimization target?</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">3.3</span>
+          <span class="task-title">For-loop vs. equivalent while-loop — controlled comparison</span>
+        </div>
+        <div class="task-body">
+          <p>Write two programs that are semantically identical but syntactically different: one using a for-loop and one using the equivalent while-loop. They should implement the same sum-from-1-to-10 computation. Compile both and collect TAC_OPT and MIPS_TOTAL for each.</p>
+
+          <table class="metrics-table">
+            <thead>
+              <tr><th>Construct</th><th>TAC_OPT</th><th>MIPS_TOTAL</th><th>LOOP_OH</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="prog-col">for-loop version</td><td class="fill"></td><td class="fill"></td><td class="fill"></td></tr>
+              <tr><td class="prog-col">while-loop version</td><td class="fill"></td><td class="fill"></td><td class="fill"></td></tr>
+            </tbody>
+          </table>
+
+          <p>Are the results identical? If there is any difference — even a single instruction — explain where it comes from. This comparison tests whether the compiler correctly treats for-loops and while-loops as equivalent at the TAC level, as their operational semantics require.</p>
+          <div class="answer-area">Difference observed (if any) and explanation:</div>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">3.4</span>
+          <span class="task-title">Write the performance analysis report</span>
+        </div>
+        <div class="task-body">
+          <p>Using your collected data from Tasks 3.1–3.3, write a short performance analysis report. The report must be structured with the four sections below and submitted as a separate document (plain text, markdown, or PDF).</p>
+
+          <div class="report-box">
+            <h4>Required Report Structure</h4>
+
+            <div class="report-section">
+              <h5>Section 1 — Methodology (3–5 sentences)</h5>
+              <p>Describe how you collected each metric. State what you counted as "one MIPS instruction," how you identified loop overhead instructions, and how you determined whether a spill had occurred. Reproducibility requires this precision.</p>
+            </div>
+
+            <div class="report-section">
+              <h5>Section 2 — Results (metrics table + 2–3 observations)</h5>
+              <p>Include your completed metrics table (Table 3.1) and three factual observations drawn from the numbers — one per program. For example: "Program C's optimizer reduced TAC instruction count by X%, which is Y percentage points higher than the average across all three programs." Do not interpret yet — only state what the numbers show.</p>
+            </div>
+
+            <div class="report-section">
+              <h5>Section 3 — Analysis (4–6 sentences)</h5>
+              <p>Interpret the results. Address at least two of the following: Why does nesting increase LOOP_OH? Why does constant folding produce TAC savings but sometimes smaller-than-expected MIPS savings? What does the for-loop vs. while-loop comparison reveal about the TAC intermediate representation's role? Is the SPILL count correlated with loop depth, body size, or both?</p>
+            </div>
+
+            <div class="report-section">
+              <h5>Section 4 — Limitations &amp; Improvement Opportunities (3–4 sentences)</h5>
+              <p>Identify one limitation of the current optimizer and one limitation of the current code generator that your data exposes. For each limitation, propose a specific technique that would address it (e.g., loop invariant code motion, improved register allocation, strength reduction). Reference your metric data to justify that the limitation is significant.</p>
+            </div>
+          </div>
+
+          <div class="callout purple">
+            <strong>Report Grading Criteria</strong>
+            Specificity is required. Vague claims like "the optimizer makes the code faster" will not receive credit. Graded claims reference specific metric values from your table: "The optimizer reduced TAC instruction count by 18% (from 11 to 9) for Program A, primarily through constant folding of the init expression."
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- FINAL CHECKPOINT -->
+  <div class="final-checkpoint">
+    <h3>★ Final Checkpoint — Complete For-Loop Implementation</h3>
+    <p>This session completes the three-day for-loop implementation series. Before submitting, verify all of the following:</p>
+    <ul>
+      <li><strong>Compilation correctness:</strong> All five Day 2 test programs still compile and produce correct output in the MIPS simulator.</li>
+      <li><strong>Optimizer verification:</strong> Constant-true condition loop no longer contains a <code>beqz</code> instruction. Constant-false condition loop emits no body code.</li>
+      <li><strong>Code generator mapping:</strong> You have completed Table 2.1 (TAC → MIPS mapping) with all six TAC types filled in.</li>
+      <li><strong>Metrics table:</strong> Table 3.1 is fully populated with all five metrics for all three programs. The for-loop vs. while-loop comparison table (Task 3.3) is complete.</li>
+      <li><strong>Performance report:</strong> All four sections written with quantitative data, submitted as a separate document.</li>
+    </ul>
+    <p style="margin-top:1rem">Together, Days 1–3 demonstrate full for-loop support: you added the keyword (Day 1), implemented semantic validation and TAC lowering (Day 2), and verified the optimizer and code generator while measuring their effectiveness quantitatively (Day 3). The compiler pipeline is complete.</p>
+  </div>
+
+
+  <!-- EXTENSION -->
+  <div class="part">
+    <div class="part-header">
+      <div class="part-num">★</div>
+      <div class="part-title">Extension — Unimplemented Optimizations &amp; Deeper Analysis</div>
+      <span class="part-time">If time allows</span>
+    </div>
+    <div class="part-body">
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">E.1</span>
+          <span class="task-title">Design loop invariant code motion (LICM)</span>
+        </div>
+        <div class="task-body">
+          <p>Loop invariant code motion moves computations whose operands do not change across iterations outside the loop — into the init section — so they execute once instead of N times. Consider this loop:</p>
+          <pre><code><span class="kw">for</span> (i <span class="cmt">=</span> <span class="num">0</span><span class="cmt">;</span> i <span class="cmt">&lt;</span> n<span class="cmt">;</span> i <span class="cmt">=</span> i <span class="cmt">+</span> <span class="num">1</span>) {
+    result <span class="cmt">=</span> result <span class="cmt">+</span> base <span class="cmt">*</span> scale<span class="cmt">;</span>  <span class="cmt">// base and scale are loop-invariant</span>
+}</code></pre>
+          <p>The subexpression <code>base * scale</code> is computed on every iteration even though neither operand changes. If LICM were implemented:</p>
+          <ol>
+            <li>How would the TAC for the loop change? Show the before and after TAC for the body and the init.</li>
+            <li>What data structure would the optimizer need to maintain to determine that a TAC operand is loop-invariant? What information about each variable is required?</li>
+            <li>At what point in the TAC linked list would the hoisted instruction be inserted? Is the current TAC data structure in <code>tac.h</code>/<code>tac.c</code> capable of insertion at an arbitrary position?</li>
+            <li>How would LICM interact with the three labels in the for-loop TAC? Specifically, which of the three labels (start, update, end) marks the boundary above which code can be safely hoisted?</li>
+          </ol>
+          <p>Using your metrics from Task 3.1, estimate how many MIPS instructions LICM would save for a loop body containing two loop-invariant multiplications.</p>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="task-head">
+          <span class="task-num">E.2</span>
+          <span class="task-title">Strength reduction analysis</span>
+        </div>
+        <div class="task-body">
+          <p>Strength reduction replaces expensive operations (multiplication, division) with cheaper ones (addition, shift) when the relationship between loop iteration and the computed value is linear. For a loop computing <code>result = i * 4</code>, a strength-reduced version replaces the multiply with an accumulator: initialize <code>t = 0</code> before the loop, then <code>t = t + 4</code> in the update step.</p>
+          <p>Using your MIPS mapping from Task 2.1, answer:</p>
+          <ol>
+            <li>How many MIPS instructions does a <code>TAC_BINOP</code> multiply generate compared to a <code>TAC_BINOP</code> add? What is the instruction-count saving per iteration for a loop of N=10 iterations?</li>
+            <li>Strength reduction introduces a new induction variable (the accumulator). In the TAC, this requires an additional variable declaration and an additional <code>TAC_ASSIGN</code> in the init. Does the per-iteration saving outweigh the one-time setup cost? At what minimum loop count does strength reduction become beneficial?</li>
+            <li>The current compiler does not implement strength reduction. Based on your data from Program B (nested loops), estimate the potential MIPS_TOTAL reduction if the inner loop body's multiplications were strength-reduced. Show your calculation.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="questions">
+        <h4>Final Reflection Questions — submit with the performance report</h4>
+        <ol>
+          <li>Your metrics show that loop overhead (labels + branch + jump) is constant regardless of the loop body size. This means LOOP_OH as a <em>percentage</em> of MIPS_TOTAL decreases as the body grows larger. What is the name of this phenomenon in performance analysis? What does it imply about when it is worth spending engineering effort to reduce loop overhead?</li>
+          <li>The optimizer operates on a flat linked list of TAC instructions. A more powerful optimizer would use a Control Flow Graph (CFG), where each basic block is a node and edges represent possible execution paths. Name one optimization that requires a CFG and cannot be safely performed on a flat instruction list. Explain why the linear structure is insufficient.</li>
+          <li>Your performance metrics compare instruction counts, but two programs with the same instruction count can have very different execution times depending on memory access patterns. What additional metric would you collect to capture memory behavior? Where in the compiler pipeline would the data for that metric come from?</li>
+          <li>The current for-loop TAC uses three labels (start, update, end). A real-world compiler targeting a CPU with a branch delay slot would need to insert a no-op after every branch instruction. How would this affect your LOOP_OH metric, and would the optimizer's dead branch elimination become more or less valuable in this context?</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:var(--muted);font-size:.8rem;margin-top:3rem;border-top:1px solid var(--border);padding-top:1.5rem">
+    CST-405 · Compiler Design · For-Loop Activity — Day 3 of 3
+  </div>
+
+</div>
+</body>
+</html>

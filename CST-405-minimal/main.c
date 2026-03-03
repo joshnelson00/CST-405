@@ -111,8 +111,11 @@ int main(int argc, char* argv[]) {
         printf("│ PHASE 4: CODE OPTIMIZATION                               │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
         printf("│ Applying optimizations:                                  │\n");
-        printf("│ • Constant folding (evaluate compile-time expressions)   │\n");
-        printf("│ • Copy propagation (replace variables with values)       │\n");
+        printf("│ • Constant folding  (arithmetic + comparisons, any depth)│\n");
+        printf("│ • Copy propagation  (replace vars with values, pre-loop) │\n");
+        printf("│ • Dead branch elim. (IF_FALSE <true const> → removed)    │\n");
+        printf("│ • Dead loop  elim.  (IF_FALSE 0 → skip entire body)      │\n");
+        printf("│ • Proper nesting    (loop depth counter, not bool flag)   │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
         BenchmarkResult* bench_opt = start_benchmark();
         optimizeTAC2();

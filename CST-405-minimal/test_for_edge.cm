@@ -1,7 +1,0 @@
-int main() {
-    int arr[5];
-    int i;
-    for (arr[0] = 0; ; arr[0] = arr[0] + 1) {
-        print(arr[0]);
-    }
-}

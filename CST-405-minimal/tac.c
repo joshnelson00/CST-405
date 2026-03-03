@@ -302,7 +302,45 @@ void generateTAC(ASTNode* node) {
             appendTAC(createTAC(TAC_LABEL, end_label, NULL, NULL));
             break;
         }
-        
+
+        case NODE_IF: {
+            /* Generate TAC for if / if-else.
+             *
+             * if-only:    IF_FALSE cond GOTO end
+             *             <then-body>
+             *             LABEL end
+             *
+             * if-else:    IF_FALSE cond GOTO else_lbl
+             *             <then-body>
+             *             GOTO end_lbl
+             *             LABEL else_lbl
+             *             <else-body>
+             *             LABEL end_lbl
+             *
+             * Using %prec LOWER_THAN_ELSE in the parser ensures the else
+             * always binds to the nearest if (dangling-else resolved). */
+            char* cond = generateTACExpr(node->data.if_stmt.condition);
+
+            if (node->data.if_stmt.else_stmt) {
+                /* if-else */
+                char* else_lbl = newLabel();
+                char* end_lbl  = newLabel();
+                appendTAC(createTAC(TAC_IF_FALSE, cond, NULL, else_lbl));
+                generateTAC(node->data.if_stmt.then_stmt);
+                appendTAC(createTAC(TAC_GOTO, end_lbl, NULL, NULL));
+                appendTAC(createTAC(TAC_LABEL, else_lbl, NULL, NULL));
+                generateTAC(node->data.if_stmt.else_stmt);
+                appendTAC(createTAC(TAC_LABEL, end_lbl, NULL, NULL));
+            } else {
+                /* if-only */
+                char* end_lbl = newLabel();
+                appendTAC(createTAC(TAC_IF_FALSE, cond, NULL, end_lbl));
+                generateTAC(node->data.if_stmt.then_stmt);
+                appendTAC(createTAC(TAC_LABEL, end_lbl, NULL, NULL));
+            }
+            break;
+        }
+
         default:
             break;
     }

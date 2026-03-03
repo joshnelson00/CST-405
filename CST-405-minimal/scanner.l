@@ -29,6 +29,8 @@ int yycolumn = 1;
 "return"        { yycolumn += yyleng; return RETURN; }
 "while"         { yycolumn += yyleng; return WHILE; }
 "for"           { yycolumn += yyleng; return FOR; }
+"if"            { yycolumn += yyleng; return IF; }
+"else"          { yycolumn += yyleng; return ELSE; }
 
 \"[^\"]*\" {
     /* String literal with escape sequences */

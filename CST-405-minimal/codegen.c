@@ -188,6 +188,11 @@ void collectFloatConsts(CodeGenContext* ctx, ASTNode* node) {
             collectFloatConsts(ctx, node->data.for_loop.update);
             collectFloatConsts(ctx, node->data.for_loop.body);
             break;
+        case NODE_IF:
+            collectFloatConsts(ctx, node->data.if_stmt.condition);
+            collectFloatConsts(ctx, node->data.if_stmt.then_stmt);
+            collectFloatConsts(ctx, node->data.if_stmt.else_stmt); /* NULL-safe */
+            break;
         default:
             break;
     }

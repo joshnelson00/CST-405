@@ -38,6 +38,19 @@ void checkWhileLoop(ASTNode* condition) {
     }
     // Could add more sophisticated checks here for variable analysis
 }
+/* Warn when an if-statement condition is a compile-time constant */
+void checkIfCondition(ASTNode* condition) {
+    if (!condition) return;
+    if (condition->type == NODE_NUM) {
+        if (condition->data.num != 0) {
+            fprintf(stderr, "\n⚠️  Warning: if condition always true at line %d\n", yyline);
+            fprintf(stderr, "   The else-branch (if present) is dead code\n\n");
+        } else {
+            fprintf(stderr, "\n⚠️  Warning: if condition always false at line %d\n", yyline);
+            fprintf(stderr, "   The then-body will never execute\n\n");
+        }
+    }
+}
 int syntax_error_count = 0;    /* Counter for syntax errors */
 extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %}
@@ -63,12 +76,16 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %token PRINT           /* Statement keywords */
 %token RETURN
 %token WHILE FOR       /* Loop keywords */
+%token IF ELSE         /* Conditional keywords */
 %token EQ NE LT GT LE GE   /* Comparison operators */
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program func_list func param_list param stmt_list stmt decl assign expr print_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update
+%type <node> program func_list func param_list param stmt_list stmt decl assign expr print_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update if_stmt
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
+/* Dangling-else: LOWER_THAN_ELSE < ELSE so shift always wins → else attaches to nearest if */
+%nonassoc LOWER_THAN_ELSE
+%nonassoc ELSE
 %left EQ NE LT GT LE GE
 %left '+' '-'
 %left '*' '/'
@@ -211,6 +228,7 @@ stmt:
     | return_stmt /* Return statement */
     | while_stmt /* While loop statement */
     | for_stmt   /* For loop statement */
+    | if_stmt    /* If / if-else statement */
     | func_call ';' {
         /* Bare function call as statement (e.g., fillNumbers(arr);) */
         $$ = $1;
@@ -527,6 +545,24 @@ while_stmt:
 for_stmt:
     FOR '(' for_init ';' for_cond ';' for_update ')' stmt {
         $$ = createFor($3, $5, $7, $9);
+    }
+    ;
+
+/* IF STATEMENT RULE
+ * Two productions — no-else and with-else.
+ * The no-else production carries %prec LOWER_THAN_ELSE so that when Bison
+ * sees ELSE after the then-stmt it shifts (ELSE > LOWER_THAN_ELSE), binding
+ * the else-clause to the innermost if.  This resolves the dangling-else
+ * ambiguity in favour of C-standard behaviour.
+ */
+if_stmt:
+    IF '(' expr ')' stmt %prec LOWER_THAN_ELSE {
+        checkIfCondition($3);          /* warn on constant condition */
+        $$ = createIf($3, $5, NULL);   /* if without else */
+    }
+    | IF '(' expr ')' stmt ELSE stmt {
+        checkIfCondition($3);          /* warn on constant condition */
+        $$ = createIf($3, $5, $7);     /* if with else */
     }
     ;
 
