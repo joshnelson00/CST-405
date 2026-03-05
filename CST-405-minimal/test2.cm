@@ -79,51 +79,46 @@ int main() {
         }
     }
     print(r);          /* expect: 5 */
-
     /* ---- Test 6: all six comparison operators ----------------------- */
-
     /* Less-than: b (5) < a (10) */
     r = 0;
     if (b < a) {
         r = 6;
     }
-    print(r);          /* expect: 6 */
+    print("6 ");       /* expect: 6 (no newline) */
 
     /* Less-than-or-equal: a (10) <= 10 */
     r = 0;
     if (a <= 10) {
         r = 6;
     }
-    print(r);          /* expect: 6 */
+    print("6 ");       /* expect: 6 (no newline) */
 
     /* Greater-than: a (10) > b (5) */
     r = 0;
     if (a > b) {
         r = 6;
     }
-    print(r);          /* expect: 6 */
+    print("6 ");       /* expect: 6 (no newline) */
 
     /* Greater-than-or-equal: a (10) >= 10 */
     r = 0;
     if (a >= 10) {
         r = 6;
     }
-    print(r);          /* expect: 6 */
-
+    print("6 ");       /* expect: 6 (no newline) */
     /* Equal: a (10) == 10 */
     r = 0;
     if (a == 10) {
         r = 6;
     }
-    print(r);          /* expect: 6 */
-
-    /* Not-equal: a (10) != b (5) */
+    print("6 ");       /* expect: 6 (no newline) */
+    /* Not-equal: a (10) != b (5) -- final 6 ends the line */
     r = 0;
     if (a != b) {
         r = 6;
     }
-    print(r);          /* expect: 6 */
-
+    print(r);          /* expect: 6 (with newline -- ends the line) */
     /* ---- Test 7: if inside a function ------------------------------- */
     /* sign_test(10) should return 7 because 10 > 0                     */
     r = sign_test(a);
