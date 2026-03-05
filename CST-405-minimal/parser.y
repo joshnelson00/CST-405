@@ -38,6 +38,27 @@ void checkWhileLoop(ASTNode* condition) {
     }
     // Could add more sophisticated checks here for variable analysis
 }
+/* Function to check for infinite/dead loops in for statements */
+void checkForLoop(ASTNode* condition) {
+    // NULL condition means for(;;) — always infinite
+    if (!condition) {
+        fprintf(stderr, "\n⚠️  Warning: Infinite loop detected at line %d\n", yyline);
+        fprintf(stderr, "   for(;;) has no condition — loop runs forever\n");
+        fprintf(stderr, "💡 Add a condition, e.g. for(i = 0; i < n; i = i + 1)\n\n");
+        return;
+    }
+    if (condition->type == NODE_NUM) {
+        if (condition->data.num != 0) {
+            fprintf(stderr, "\n⚠️  Warning: Infinite loop detected at line %d\n", yyline);
+            fprintf(stderr, "   for-loop condition is always true (non-zero constant)\n");
+            fprintf(stderr, "💡 Consider adding a proper loop counter or variable condition\n\n");
+        } else {
+            fprintf(stderr, "\n⚠️  Warning: Dead loop detected at line %d\n", yyline);
+            fprintf(stderr, "   for-loop condition is always false (zero constant) — body never runs\n");
+            fprintf(stderr, "💡 Loop body is unreachable code; remove it or fix the condition\n\n");
+        }
+    }
+}
 /* Warn when an if-statement condition is a compile-time constant */
 void checkIfCondition(ASTNode* condition) {
     if (!condition) return;
@@ -544,6 +565,7 @@ while_stmt:
  */
 for_stmt:
     FOR '(' for_init ';' for_cond ';' for_update ')' stmt {
+        checkForLoop($5);  /* Semantic check for infinite/dead for loops */
         $$ = createFor($3, $5, $7, $9);
     }
     ;

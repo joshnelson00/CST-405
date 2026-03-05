@@ -553,6 +553,10 @@ int isArrayVar(char* name) {
 void addParamsToScope(ASTNode* node) {
     if (!node) return;
     if (node->type == NODE_PARAM) {
+        /* Pre-register param count so recursive calls inside the body can
+         * pass the argument-count check before addFunction() runs. */
+        if (globalSymTab.current_func_index >= 0)
+            globalSymTab.funcs[globalSymTab.current_func_index].param_count++;
         if (node->data.param.is_array) {
             /* Array parameters have unknown size at compile time.
              * Use a large placeholder size to avoid false bounds warnings. */

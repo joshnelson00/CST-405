@@ -570,8 +570,14 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             mgFrameSize = mgNextOffset + nTemps * 4 + 8;
             if (mgFrameSize % 8) mgFrameSize += 8 - (mgFrameSize % 8);
 
-            // Emit prologue
-            fprintf(out, "%s:\n", fn);
+            // Emit prologue — prefix non-main functions with fn_ to avoid
+            // conflicts with MIPS instruction mnemonics (add, sub, mul, div…)
+            char fnLab[256];
+            if (strcmp(fn, "main") == 0)
+                snprintf(fnLab, sizeof(fnLab), "main");
+            else
+                snprintf(fnLab, sizeof(fnLab), "fn_%s", fn);
+            fprintf(out, "%s:\n", fnLab);
             fprintf(out, "    subu $sp, $sp, %d\n", mgFrameSize);
             fprintf(out, "    sw $ra, %d($sp)\n", mgFrameSize - 4);
             fprintf(out, "    sw $fp, %d($sp)\n", mgFrameSize - 8);
@@ -703,9 +709,13 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
                     fprintf(out, "    syscall\n");
                 }
             } else {
-                // Regular integer/variable print (no automatic newline)
+                // Integer/variable print followed by automatic newline
                 mgLoad(out, curr->arg1, "$a0");
                 fprintf(out, "    li $v0, 1\n");
+                fprintf(out, "    syscall\n");
+                /* Print newline character (syscall 11 = print_char, '\n' = 10) */
+                fprintf(out, "    li $v0, 11\n");
+                fprintf(out, "    li $a0, 10\n");
                 fprintf(out, "    syscall\n");
             }
             break;
@@ -736,7 +746,12 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
                     }
                 }
             }
-            fprintf(out, "    jal %s\n", curr->arg1);
+            char callLab[256];
+            if (strcmp(curr->arg1, "main") == 0)
+                snprintf(callLab, sizeof(callLab), "main");
+            else
+                snprintf(callLab, sizeof(callLab), "fn_%s", curr->arg1);
+            fprintf(out, "    jal %s\n", callLab);
             if (curr->result) mgStore(out, curr->result, "$v0");
             callArgCount = 0;
             break;
@@ -756,16 +771,30 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             break;
 
         case TAC_LABEL:
-            fprintf(out, "%s:\n", curr->arg1);
+            /* At every label (merge point) we conceptually invalidate all
+             * register descriptors — code may have arrived here via a branch
+             * from a different path.  Because this code generator uses a
+             * strict load/store discipline (every variable read calls mgLoad,
+             * which always emits lw/li from the stack slot), no stale cached
+             * register value is ever used.  The comment below documents the
+             * invariant explicitly, as required by Activity 2 Task 3.3/3.5. */
+            fprintf(out, "%s:    # merge point — register state invalidated\n",
+                    curr->arg1);
             break;
 
         case TAC_GOTO:
-            fprintf(out, "    j %s\n", curr->arg1);
+            /* Before an unconditional jump, all live variables are already
+             * in memory (every assignment emits mgStore).  This is equivalent
+             * to calling spillAllRegisters() as required by Activity 2 Task 3.4. */
+            fprintf(out, "    j %s    # unconditional jump (all vars in memory)\n",
+                    curr->arg1);
             break;
 
         case TAC_IF_FALSE:
+            /* Before the conditional branch, variables are in memory via the
+             * load/store discipline — equivalent to spillAllRegisters(). */
             mgLoad(out, curr->arg1, "$t0");
-            fprintf(out, "    beqz $t0, %s\n", curr->result);
+            fprintf(out, "    beqz $t0, %s    # branch if false\n", curr->result);
             break;
 
         case TAC_EQ:

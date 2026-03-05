@@ -108,6 +108,27 @@ void checkWhileLoop(ASTNode* condition) {
     }
     // Could add more sophisticated checks here for variable analysis
 }
+/* Function to check for infinite/dead loops in for statements */
+void checkForLoop(ASTNode* condition) {
+    // NULL condition means for(;;) — always infinite
+    if (!condition) {
+        fprintf(stderr, "\n⚠️  Warning: Infinite loop detected at line %d\n", yyline);
+        fprintf(stderr, "   for(;;) has no condition — loop runs forever\n");
+        fprintf(stderr, "💡 Add a condition, e.g. for(i = 0; i < n; i = i + 1)\n\n");
+        return;
+    }
+    if (condition->type == NODE_NUM) {
+        if (condition->data.num != 0) {
+            fprintf(stderr, "\n⚠️  Warning: Infinite loop detected at line %d\n", yyline);
+            fprintf(stderr, "   for-loop condition is always true (non-zero constant)\n");
+            fprintf(stderr, "💡 Consider adding a proper loop counter or variable condition\n\n");
+        } else {
+            fprintf(stderr, "\n⚠️  Warning: Dead loop detected at line %d\n", yyline);
+            fprintf(stderr, "   for-loop condition is always false (zero constant) — body never runs\n");
+            fprintf(stderr, "💡 Loop body is unreachable code; remove it or fix the condition\n\n");
+        }
+    }
+}
 /* Warn when an if-statement condition is a compile-time constant */
 void checkIfCondition(ASTNode* condition) {
     if (!condition) return;
@@ -124,7 +145,7 @@ void checkIfCondition(ASTNode* condition) {
 int syntax_error_count = 0;    /* Counter for syntax errors */
 extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 
-#line 128 "parser.tab.c"
+#line 149 "parser.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -606,16 +627,16 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,    99,    99,   103,   108,   109,   116,   116,   122,   122,
-     128,   128,   134,   134,   140,   140,   146,   146,   152,   152,
-     159,   159,   166,   166,   173,   173,   180,   185,   188,   195,
-     199,   203,   207,   215,   218,   225,   226,   227,   228,   229,
-     230,   231,   232,   236,   240,   241,   246,   252,   258,   275,
-     292,   303,   318,   347,   391,   394,   397,   401,   416,   419,
-     422,   425,   428,   431,   434,   437,   440,   443,   446,   449,
-     452,   496,   503,   506,   513,   517,   525,   528,   535,   546,
-     559,   563,   571,   572,   579,   586,   598,   612,   613,   618,
-     619,   631
+       0,   120,   120,   124,   129,   130,   137,   137,   143,   143,
+     149,   149,   155,   155,   161,   161,   167,   167,   173,   173,
+     180,   180,   187,   187,   194,   194,   201,   206,   209,   216,
+     220,   224,   228,   236,   239,   246,   247,   248,   249,   250,
+     251,   252,   253,   257,   261,   262,   267,   273,   279,   296,
+     313,   324,   339,   368,   412,   415,   418,   422,   437,   440,
+     443,   446,   449,   452,   455,   458,   461,   464,   467,   470,
+     473,   517,   524,   527,   534,   538,   546,   549,   556,   567,
+     581,   585,   593,   594,   601,   608,   620,   634,   635,   640,
+     641,   653
 };
 #endif
 
@@ -1392,145 +1413,145 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* program: func_list  */
-#line 99 "parser.y"
+#line 120 "parser.y"
               { 
         /* Action: Save the function list as our AST root */
         root = (yyvsp[0].node);  /* $1 refers to the first symbol (func_list) */
     }
-#line 1401 "parser.tab.c"
+#line 1422 "parser.tab.c"
     break;
 
   case 3: /* program: func_list error  */
-#line 103 "parser.y"
+#line 124 "parser.y"
                                { root = (yyvsp[-1].node); yyerrok; }
-#line 1407 "parser.tab.c"
+#line 1428 "parser.tab.c"
     break;
 
   case 4: /* func_list: func  */
-#line 108 "parser.y"
+#line 129 "parser.y"
          { (yyval.node) = (yyvsp[0].node); }
-#line 1413 "parser.tab.c"
+#line 1434 "parser.tab.c"
     break;
 
   case 5: /* func_list: func func_list  */
-#line 109 "parser.y"
+#line 130 "parser.y"
                    { 
         (yyvsp[-1].node)->data.func.next = (yyvsp[0].node);
         (yyval.node) = (yyvsp[-1].node);
     }
-#line 1422 "parser.tab.c"
+#line 1443 "parser.tab.c"
     break;
 
   case 6: /* $@1: %empty  */
-#line 116 "parser.y"
+#line 137 "parser.y"
                               { prepareFunctionScope((yyvsp[-3].str), TYPE_INT); addParamsToScope((yyvsp[-1].node)); }
-#line 1428 "parser.tab.c"
+#line 1449 "parser.tab.c"
     break;
 
   case 7: /* func: INT ID '(' param_list ')' $@1 '{' stmt_list '}'  */
-#line 116 "parser.y"
+#line 137 "parser.y"
                                                                                                               { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-7].str), TYPE_INT, (yyvsp[-5].node), (yyvsp[-1].node));  /* Function with return type and parameters */
         addFunction((yyvsp[-7].str), TYPE_INT, (yyval.node));         /* Update with AST */
         free((yyvsp[-7].str));
     }
-#line 1439 "parser.tab.c"
+#line 1460 "parser.tab.c"
     break;
 
   case 8: /* $@2: %empty  */
-#line 122 "parser.y"
+#line 143 "parser.y"
                      { prepareFunctionScope((yyvsp[-2].str), TYPE_INT); }
-#line 1445 "parser.tab.c"
+#line 1466 "parser.tab.c"
     break;
 
   case 9: /* func: INT ID '(' ')' $@2 '{' stmt_list '}'  */
-#line 122 "parser.y"
+#line 143 "parser.y"
                                                                                { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-6].str), TYPE_INT, NULL, (yyvsp[-1].node));  /* Function with no parameters */
         addFunction((yyvsp[-6].str), TYPE_INT, (yyval.node));            /* Update with AST */
         free((yyvsp[-6].str));
     }
-#line 1456 "parser.tab.c"
+#line 1477 "parser.tab.c"
     break;
 
   case 10: /* $@3: %empty  */
-#line 128 "parser.y"
+#line 149 "parser.y"
                                   { prepareFunctionScope((yyvsp[-3].str), TYPE_FLOAT); addParamsToScope((yyvsp[-1].node)); }
-#line 1462 "parser.tab.c"
+#line 1483 "parser.tab.c"
     break;
 
   case 11: /* func: FLOAT ID '(' param_list ')' $@3 '{' stmt_list '}'  */
-#line 128 "parser.y"
+#line 149 "parser.y"
                                                                                                                     { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-7].str), TYPE_FLOAT, (yyvsp[-5].node), (yyvsp[-1].node));  /* Float function with parameters */
         addFunction((yyvsp[-7].str), TYPE_FLOAT, (yyval.node));           /* Update with AST */
         free((yyvsp[-7].str));
     }
-#line 1473 "parser.tab.c"
+#line 1494 "parser.tab.c"
     break;
 
   case 12: /* $@4: %empty  */
-#line 134 "parser.y"
+#line 155 "parser.y"
                        { prepareFunctionScope((yyvsp[-2].str), TYPE_FLOAT); }
-#line 1479 "parser.tab.c"
+#line 1500 "parser.tab.c"
     break;
 
   case 13: /* func: FLOAT ID '(' ')' $@4 '{' stmt_list '}'  */
-#line 134 "parser.y"
+#line 155 "parser.y"
                                                                                    { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-6].str), TYPE_FLOAT, NULL, (yyvsp[-1].node));  /* Float function with no parameters */
         addFunction((yyvsp[-6].str), TYPE_FLOAT, (yyval.node));            /* Update with AST */
         free((yyvsp[-6].str));
     }
-#line 1490 "parser.tab.c"
+#line 1511 "parser.tab.c"
     break;
 
   case 14: /* $@5: %empty  */
-#line 140 "parser.y"
+#line 161 "parser.y"
                                  { prepareFunctionScope((yyvsp[-3].str), TYPE_VOID); addParamsToScope((yyvsp[-1].node)); }
-#line 1496 "parser.tab.c"
+#line 1517 "parser.tab.c"
     break;
 
   case 15: /* func: VOID ID '(' param_list ')' $@5 '{' stmt_list '}'  */
-#line 140 "parser.y"
+#line 161 "parser.y"
                                                                                                                   { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-7].str), TYPE_VOID, (yyvsp[-5].node), (yyvsp[-1].node));  /* Void function with parameters */
         addFunction((yyvsp[-7].str), TYPE_VOID, (yyval.node));           /* Update with AST */
         free((yyvsp[-7].str));
     }
-#line 1507 "parser.tab.c"
+#line 1528 "parser.tab.c"
     break;
 
   case 16: /* $@6: %empty  */
-#line 146 "parser.y"
+#line 167 "parser.y"
                       { prepareFunctionScope((yyvsp[-2].str), TYPE_VOID); }
-#line 1513 "parser.tab.c"
+#line 1534 "parser.tab.c"
     break;
 
   case 17: /* func: VOID ID '(' ')' $@6 '{' stmt_list '}'  */
-#line 146 "parser.y"
+#line 167 "parser.y"
                                                                                  { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-6].str), TYPE_VOID, NULL, (yyvsp[-1].node));  /* Void function with no parameters */
         addFunction((yyvsp[-6].str), TYPE_VOID, (yyval.node));            /* Update with AST */
         free((yyvsp[-6].str));
     }
-#line 1524 "parser.tab.c"
+#line 1545 "parser.tab.c"
     break;
 
   case 18: /* $@7: %empty  */
-#line 152 "parser.y"
+#line 173 "parser.y"
                                         { prepareFunctionScope((yyvsp[-3].str), TYPE_INT); addParamsToScope((yyvsp[-1].node)); }
-#line 1530 "parser.tab.c"
+#line 1551 "parser.tab.c"
     break;
 
   case 19: /* func: INT '[' ']' ID '(' param_list ')' $@7 '{' stmt_list '}'  */
-#line 152 "parser.y"
+#line 173 "parser.y"
                                                                                                                         { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-7].str), TYPE_INT, (yyvsp[-5].node), (yyvsp[-1].node));  /* Function returning int array with parameters */
@@ -1538,17 +1559,17 @@ yyreduce:
         addFunction((yyvsp[-7].str), TYPE_INT, (yyval.node));
         free((yyvsp[-7].str));
     }
-#line 1542 "parser.tab.c"
+#line 1563 "parser.tab.c"
     break;
 
   case 20: /* $@8: %empty  */
-#line 159 "parser.y"
+#line 180 "parser.y"
                              { prepareFunctionScope((yyvsp[-2].str), TYPE_INT); }
-#line 1548 "parser.tab.c"
+#line 1569 "parser.tab.c"
     break;
 
   case 21: /* func: INT '[' ']' ID '(' ')' $@8 '{' stmt_list '}'  */
-#line 159 "parser.y"
+#line 180 "parser.y"
                                                                                        { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-6].str), TYPE_INT, NULL, (yyvsp[-1].node));  /* Function returning int array, no parameters */
@@ -1556,17 +1577,17 @@ yyreduce:
         addFunction((yyvsp[-6].str), TYPE_INT, (yyval.node));
         free((yyvsp[-6].str));
     }
-#line 1560 "parser.tab.c"
+#line 1581 "parser.tab.c"
     break;
 
   case 22: /* $@9: %empty  */
-#line 166 "parser.y"
+#line 187 "parser.y"
                                           { prepareFunctionScope((yyvsp[-3].str), TYPE_FLOAT); addParamsToScope((yyvsp[-1].node)); }
-#line 1566 "parser.tab.c"
+#line 1587 "parser.tab.c"
     break;
 
   case 23: /* func: FLOAT '[' ']' ID '(' param_list ')' $@9 '{' stmt_list '}'  */
-#line 166 "parser.y"
+#line 187 "parser.y"
                                                                                                                             { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-7].str), TYPE_FLOAT, (yyvsp[-5].node), (yyvsp[-1].node));  /* Function returning float array with parameters */
@@ -1574,17 +1595,17 @@ yyreduce:
         addFunction((yyvsp[-7].str), TYPE_FLOAT, (yyval.node));
         free((yyvsp[-7].str));
     }
-#line 1578 "parser.tab.c"
+#line 1599 "parser.tab.c"
     break;
 
   case 24: /* $@10: %empty  */
-#line 173 "parser.y"
+#line 194 "parser.y"
                                { prepareFunctionScope((yyvsp[-2].str), TYPE_FLOAT); }
-#line 1584 "parser.tab.c"
+#line 1605 "parser.tab.c"
     break;
 
   case 25: /* func: FLOAT '[' ']' ID '(' ')' $@10 '{' stmt_list '}'  */
-#line 173 "parser.y"
+#line 194 "parser.y"
                                                                                            { 
         exitFunction();
         (yyval.node) = createFunc((yyvsp[-6].str), TYPE_FLOAT, NULL, (yyvsp[-1].node));  /* Function returning float array, no parameters */
@@ -1592,137 +1613,137 @@ yyreduce:
         addFunction((yyvsp[-6].str), TYPE_FLOAT, (yyval.node));
         free((yyvsp[-6].str));
     }
-#line 1596 "parser.tab.c"
+#line 1617 "parser.tab.c"
     break;
 
   case 26: /* func: error '}'  */
-#line 180 "parser.y"
+#line 201 "parser.y"
                 { yyerrok; }
-#line 1602 "parser.tab.c"
+#line 1623 "parser.tab.c"
     break;
 
   case 27: /* param_list: param  */
-#line 185 "parser.y"
+#line 206 "parser.y"
           { 
         (yyval.node) = createParamList((yyvsp[0].node), NULL);  /* Single parameter */
     }
-#line 1610 "parser.tab.c"
+#line 1631 "parser.tab.c"
     break;
 
   case 28: /* param_list: param_list ',' param  */
-#line 188 "parser.y"
+#line 209 "parser.y"
                            { 
         (yyval.node) = createParamList((yyvsp[-2].node), (yyvsp[0].node));  /* Multiple parameters */
     }
-#line 1618 "parser.tab.c"
+#line 1639 "parser.tab.c"
     break;
 
   case 29: /* param: INT ID  */
-#line 195 "parser.y"
+#line 216 "parser.y"
            { 
         (yyval.node) = createParam((yyvsp[0].str), TYPE_INT);  /* Integer parameter */
         free((yyvsp[0].str));
     }
-#line 1627 "parser.tab.c"
+#line 1648 "parser.tab.c"
     break;
 
   case 30: /* param: FLOAT ID  */
-#line 199 "parser.y"
+#line 220 "parser.y"
                { 
         (yyval.node) = createParam((yyvsp[0].str), TYPE_FLOAT);  /* Float parameter */
         free((yyvsp[0].str));
     }
-#line 1636 "parser.tab.c"
+#line 1657 "parser.tab.c"
     break;
 
   case 31: /* param: INT ID '[' ']'  */
-#line 203 "parser.y"
+#line 224 "parser.y"
                      {
         (yyval.node) = createArrayParam((yyvsp[-2].str), TYPE_INT);  /* Integer array parameter */
         free((yyvsp[-2].str));
     }
-#line 1645 "parser.tab.c"
+#line 1666 "parser.tab.c"
     break;
 
   case 32: /* param: FLOAT ID '[' ']'  */
-#line 207 "parser.y"
+#line 228 "parser.y"
                        {
         (yyval.node) = createArrayParam((yyvsp[-2].str), TYPE_FLOAT);  /* Float array parameter */
         free((yyvsp[-2].str));
     }
-#line 1654 "parser.tab.c"
+#line 1675 "parser.tab.c"
     break;
 
   case 33: /* stmt_list: stmt  */
-#line 215 "parser.y"
+#line 236 "parser.y"
          { 
         (yyval.node) = (yyvsp[0].node);  /* Single statement */
     }
-#line 1662 "parser.tab.c"
+#line 1683 "parser.tab.c"
     break;
 
   case 34: /* stmt_list: stmt_list stmt  */
-#line 218 "parser.y"
+#line 239 "parser.y"
                      { 
         (yyval.node) = createStmtList((yyvsp[-1].node), (yyvsp[0].node));  /* Multiple statements */
     }
-#line 1670 "parser.tab.c"
+#line 1691 "parser.tab.c"
     break;
 
   case 42: /* stmt: func_call ';'  */
-#line 232 "parser.y"
+#line 253 "parser.y"
                     {
         /* Bare function call as statement (e.g., fillNumbers(arr);) */
         (yyval.node) = (yyvsp[-1].node);
     }
-#line 1679 "parser.tab.c"
+#line 1700 "parser.tab.c"
     break;
 
   case 43: /* stmt: '{' stmt_list '}'  */
-#line 236 "parser.y"
+#line 257 "parser.y"
                         {
         /* Nested block statement */
         (yyval.node) = (yyvsp[-1].node);
     }
-#line 1688 "parser.tab.c"
+#line 1709 "parser.tab.c"
     break;
 
   case 44: /* stmt: error ';'  */
-#line 240 "parser.y"
+#line 261 "parser.y"
                 { yyerrok; }
-#line 1694 "parser.tab.c"
+#line 1715 "parser.tab.c"
     break;
 
   case 45: /* stmt: error  */
-#line 241 "parser.y"
+#line 262 "parser.y"
             { yyerrok; }
-#line 1700 "parser.tab.c"
+#line 1721 "parser.tab.c"
     break;
 
   case 46: /* decl: INT ID ';'  */
-#line 246 "parser.y"
+#line 267 "parser.y"
                { 
         addVar((yyvsp[-1].str), TYPE_INT);                    
         (yyval.node) = createDecl((yyvsp[-1].str), TYPE_INT);  
         free((yyvsp[-1].str));  
         printSymTab();          
     }
-#line 1711 "parser.tab.c"
+#line 1732 "parser.tab.c"
     break;
 
   case 47: /* decl: FLOAT ID ';'  */
-#line 252 "parser.y"
+#line 273 "parser.y"
                    { 
         addVar((yyvsp[-1].str), TYPE_FLOAT); 
         (yyval.node) = createDecl((yyvsp[-1].str), TYPE_FLOAT); 
         free((yyvsp[-1].str));                       
         printSymTab();          
     }
-#line 1722 "parser.tab.c"
+#line 1743 "parser.tab.c"
     break;
 
   case 48: /* decl: INT ID '[' NUM ']' ';'  */
-#line 258 "parser.y"
+#line 279 "parser.y"
                              {
         /* Array declaration with size validation */
         int size = (int)(yyvsp[-2].num);
@@ -1740,11 +1761,11 @@ yyreduce:
         free((yyvsp[-4].str));                       /* Free the identifier string */
         printSymTab();          /* Print symbol table for verification */
     }
-#line 1744 "parser.tab.c"
+#line 1765 "parser.tab.c"
     break;
 
   case 49: /* decl: FLOAT ID '[' NUM ']' ';'  */
-#line 275 "parser.y"
+#line 296 "parser.y"
                                {
         /* Array declaration with size validation */
         int size = (int)(yyvsp[-2].num);
@@ -1762,11 +1783,11 @@ yyreduce:
         free((yyvsp[-4].str));                       /* Free the identifier string */
         printSymTab();          /* Print symbol table for verification */
     }
-#line 1766 "parser.tab.c"
+#line 1787 "parser.tab.c"
     break;
 
   case 50: /* decl: INT ID '[' '-' NUM ']' ';'  */
-#line 292 "parser.y"
+#line 313 "parser.y"
                                  {
         /* ERROR: Negative array size */
         fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
@@ -1778,11 +1799,11 @@ yyreduce:
         (yyval.node) = createArrayDecl((yyvsp[-5].str), TYPE_INT, 1); /* Dummy node for recovery */
         free((yyvsp[-5].str));
     }
-#line 1782 "parser.tab.c"
+#line 1803 "parser.tab.c"
     break;
 
   case 51: /* decl: FLOAT ID '[' '-' NUM ']' ';'  */
-#line 303 "parser.y"
+#line 324 "parser.y"
                                    {
         /* ERROR: Negative array size */
         fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
@@ -1794,11 +1815,11 @@ yyreduce:
         (yyval.node) = createArrayDecl((yyvsp[-5].str), TYPE_FLOAT, 1); /* Dummy node for recovery */
         free((yyvsp[-5].str));
     }
-#line 1798 "parser.tab.c"
+#line 1819 "parser.tab.c"
     break;
 
   case 52: /* assign: ID '=' expr ';'  */
-#line 318 "parser.y"
+#line 339 "parser.y"
                     { 
         /* Check if left-side variable is declared */
         if (!isVarDeclared((yyvsp[-3].str))) {
@@ -1828,11 +1849,11 @@ yyreduce:
         (yyval.node) = createAssign((yyvsp[-3].str), (yyvsp[-1].node));  
         free((yyvsp[-3].str));                   
     }
-#line 1832 "parser.tab.c"
+#line 1853 "parser.tab.c"
     break;
 
   case 53: /* assign: ID '[' expr ']' '=' expr ';'  */
-#line 347 "parser.y"
+#line 368 "parser.y"
                                    {
         /* Check if variable is declared and is an array */
         if (!isVarDeclared((yyvsp[-6].str))) {
@@ -1873,36 +1894,36 @@ yyreduce:
         (yyval.node) = createArrayAssign((yyvsp[-6].str), (yyvsp[-4].node), (yyvsp[-1].node)); /* $1 = ID, $3 = index expr, $6 = value expr */
         free((yyvsp[-6].str));                           /* Free the identifier string */
     }
-#line 1877 "parser.tab.c"
+#line 1898 "parser.tab.c"
     break;
 
   case 54: /* expr: NUM  */
-#line 391 "parser.y"
+#line 412 "parser.y"
         { 
         (yyval.node) = createNum((yyvsp[0].num));  
     }
-#line 1885 "parser.tab.c"
+#line 1906 "parser.tab.c"
     break;
 
   case 55: /* expr: FLT  */
-#line 394 "parser.y"
+#line 415 "parser.y"
           { 
         (yyval.node) = createFlt((yyvsp[0].num));  
     }
-#line 1893 "parser.tab.c"
+#line 1914 "parser.tab.c"
     break;
 
   case 56: /* expr: STRING  */
-#line 397 "parser.y"
+#line 418 "parser.y"
              {
         (yyval.node) = createStr((yyvsp[0].str));
         free((yyvsp[0].str));
     }
-#line 1902 "parser.tab.c"
+#line 1923 "parser.tab.c"
     break;
 
   case 57: /* expr: ID  */
-#line 401 "parser.y"
+#line 422 "parser.y"
          { 
         /* Check if variable is declared */
         if (!isVarDeclared((yyvsp[0].str))) {
@@ -1918,107 +1939,107 @@ yyreduce:
         (yyval.node) = createVar((yyvsp[0].str));  
         free((yyvsp[0].str));            
     }
-#line 1922 "parser.tab.c"
+#line 1943 "parser.tab.c"
     break;
 
   case 58: /* expr: func_call  */
-#line 416 "parser.y"
+#line 437 "parser.y"
                 { 
         (yyval.node) = (yyvsp[0].node);  
     }
-#line 1930 "parser.tab.c"
+#line 1951 "parser.tab.c"
     break;
 
   case 59: /* expr: expr '+' expr  */
-#line 419 "parser.y"
+#line 440 "parser.y"
                     { 
         (yyval.node) = createBinOp('+', (yyvsp[-2].node), (yyvsp[0].node));  
     }
-#line 1938 "parser.tab.c"
+#line 1959 "parser.tab.c"
     break;
 
   case 60: /* expr: expr '-' expr  */
-#line 422 "parser.y"
+#line 443 "parser.y"
                     { 
         (yyval.node) = createBinOp('-', (yyvsp[-2].node), (yyvsp[0].node));  
     }
-#line 1946 "parser.tab.c"
+#line 1967 "parser.tab.c"
     break;
 
   case 61: /* expr: expr '*' expr  */
-#line 425 "parser.y"
+#line 446 "parser.y"
                     { 
         (yyval.node) = createBinOp('*', (yyvsp[-2].node), (yyvsp[0].node));  
     }
-#line 1954 "parser.tab.c"
+#line 1975 "parser.tab.c"
     break;
 
   case 62: /* expr: expr '/' expr  */
-#line 428 "parser.y"
+#line 449 "parser.y"
                     { 
         (yyval.node) = createBinOp('/', (yyvsp[-2].node), (yyvsp[0].node));  
     }
-#line 1962 "parser.tab.c"
+#line 1983 "parser.tab.c"
     break;
 
   case 63: /* expr: expr EQ expr  */
-#line 431 "parser.y"
+#line 452 "parser.y"
                    {
         (yyval.node) = createBinOp(OP_EQ, (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 1970 "parser.tab.c"
+#line 1991 "parser.tab.c"
     break;
 
   case 64: /* expr: expr NE expr  */
-#line 434 "parser.y"
+#line 455 "parser.y"
                    {
         (yyval.node) = createBinOp(OP_NE, (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 1978 "parser.tab.c"
+#line 1999 "parser.tab.c"
     break;
 
   case 65: /* expr: expr LT expr  */
-#line 437 "parser.y"
+#line 458 "parser.y"
                    {
         (yyval.node) = createBinOp(OP_LT, (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 1986 "parser.tab.c"
+#line 2007 "parser.tab.c"
     break;
 
   case 66: /* expr: expr GT expr  */
-#line 440 "parser.y"
+#line 461 "parser.y"
                    {
         (yyval.node) = createBinOp(OP_GT, (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 1994 "parser.tab.c"
+#line 2015 "parser.tab.c"
     break;
 
   case 67: /* expr: expr LE expr  */
-#line 443 "parser.y"
+#line 464 "parser.y"
                    {
         (yyval.node) = createBinOp(OP_LE, (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2002 "parser.tab.c"
+#line 2023 "parser.tab.c"
     break;
 
   case 68: /* expr: expr GE expr  */
-#line 446 "parser.y"
+#line 467 "parser.y"
                    {
         (yyval.node) = createBinOp(OP_GE, (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2010 "parser.tab.c"
+#line 2031 "parser.tab.c"
     break;
 
   case 69: /* expr: '(' expr ')'  */
-#line 449 "parser.y"
+#line 470 "parser.y"
                    {
         (yyval.node) = (yyvsp[-1].node);
     }
-#line 2018 "parser.tab.c"
+#line 2039 "parser.tab.c"
     break;
 
   case 70: /* expr: ID '[' expr ']'  */
-#line 452 "parser.y"
+#line 473 "parser.y"
                       {
         /* Check if variable is declared and is an array */
         if (!isVarDeclared((yyvsp[-3].str))) {
@@ -2059,110 +2080,111 @@ yyreduce:
         (yyval.node) = createArrayAccess((yyvsp[-3].str), (yyvsp[-1].node));  /* $1 = ID, $3 = index expression */
         free((yyvsp[-3].str));                        /* Free the identifier string */
     }
-#line 2063 "parser.tab.c"
+#line 2084 "parser.tab.c"
     break;
 
   case 71: /* print_stmt: PRINT '(' expr ')' ';'  */
-#line 496 "parser.y"
+#line 517 "parser.y"
                            { 
         (yyval.node) = createPrint((yyvsp[-2].node));  
     }
-#line 2071 "parser.tab.c"
+#line 2092 "parser.tab.c"
     break;
 
   case 72: /* return_stmt: RETURN expr ';'  */
-#line 503 "parser.y"
+#line 524 "parser.y"
                     { 
         (yyval.node) = createReturn((yyvsp[-1].node));  
     }
-#line 2079 "parser.tab.c"
+#line 2100 "parser.tab.c"
     break;
 
   case 73: /* return_stmt: RETURN ';'  */
-#line 506 "parser.y"
+#line 527 "parser.y"
                  { 
         (yyval.node) = createReturn(NULL);  
     }
-#line 2087 "parser.tab.c"
+#line 2108 "parser.tab.c"
     break;
 
   case 74: /* func_call: ID '(' arg_list ')'  */
-#line 513 "parser.y"
+#line 534 "parser.y"
                         { 
         (yyval.node) = createFuncCall((yyvsp[-3].str), (yyvsp[-1].node));  
         free((yyvsp[-3].str));
     }
-#line 2096 "parser.tab.c"
+#line 2117 "parser.tab.c"
     break;
 
   case 75: /* func_call: ID '(' ')'  */
-#line 517 "parser.y"
+#line 538 "parser.y"
                  { 
         (yyval.node) = createFuncCall((yyvsp[-2].str), NULL);  
         free((yyvsp[-2].str));
     }
-#line 2105 "parser.tab.c"
+#line 2126 "parser.tab.c"
     break;
 
   case 76: /* arg_list: expr  */
-#line 525 "parser.y"
+#line 546 "parser.y"
          { 
         (yyval.node) = createArgList((yyvsp[0].node), NULL);  /* Single argument */
     }
-#line 2113 "parser.tab.c"
+#line 2134 "parser.tab.c"
     break;
 
   case 77: /* arg_list: arg_list ',' expr  */
-#line 528 "parser.y"
+#line 549 "parser.y"
                         { 
         (yyval.node) = createArgList((yyvsp[0].node), (yyvsp[-2].node));  /* Multiple arguments - new arg with link to previous list */
     }
-#line 2121 "parser.tab.c"
+#line 2142 "parser.tab.c"
     break;
 
   case 78: /* while_stmt: WHILE '(' expr ')' '{' stmt_list '}'  */
-#line 535 "parser.y"
+#line 556 "parser.y"
                                          {
         checkWhileLoop((yyvsp[-4].node));  /* Semantic check for infinite/dead loops */
         (yyval.node) = createWhile((yyvsp[-4].node), (yyvsp[-1].node));
     }
-#line 2130 "parser.tab.c"
+#line 2151 "parser.tab.c"
     break;
 
   case 79: /* for_stmt: FOR '(' for_init ';' for_cond ';' for_update ')' stmt  */
-#line 546 "parser.y"
+#line 567 "parser.y"
                                                           {
+        checkForLoop((yyvsp[-4].node));  /* Semantic check for infinite/dead for loops */
         (yyval.node) = createFor((yyvsp[-6].node), (yyvsp[-4].node), (yyvsp[-2].node), (yyvsp[0].node));
     }
-#line 2138 "parser.tab.c"
+#line 2160 "parser.tab.c"
     break;
 
   case 80: /* if_stmt: IF '(' expr ')' stmt  */
-#line 559 "parser.y"
+#line 581 "parser.y"
                                                {
         checkIfCondition((yyvsp[-2].node));          /* warn on constant condition */
         (yyval.node) = createIf((yyvsp[-2].node), (yyvsp[0].node), NULL);   /* if without else */
     }
-#line 2147 "parser.tab.c"
+#line 2169 "parser.tab.c"
     break;
 
   case 81: /* if_stmt: IF '(' expr ')' stmt ELSE stmt  */
-#line 563 "parser.y"
+#line 585 "parser.y"
                                      {
         checkIfCondition((yyvsp[-4].node));          /* warn on constant condition */
         (yyval.node) = createIf((yyvsp[-4].node), (yyvsp[-2].node), (yyvsp[0].node));     /* if with else */
     }
-#line 2156 "parser.tab.c"
+#line 2178 "parser.tab.c"
     break;
 
   case 82: /* for_init: %empty  */
-#line 571 "parser.y"
+#line 593 "parser.y"
                 { (yyval.node) = NULL; }
-#line 2162 "parser.tab.c"
+#line 2184 "parser.tab.c"
     break;
 
   case 83: /* for_init: INT ID '=' expr  */
-#line 572 "parser.y"
+#line 594 "parser.y"
                       {
         /* Inline declaration: for (int i = 0; ...) */
         addVar((yyvsp[-2].str), TYPE_INT);
@@ -2170,11 +2192,11 @@ yyreduce:
         (yyval.node) = createStmtList(createDecl((yyvsp[-2].str), TYPE_INT), createAssign((yyvsp[-2].str), (yyvsp[0].node)));
         free((yyvsp[-2].str));
     }
-#line 2174 "parser.tab.c"
+#line 2196 "parser.tab.c"
     break;
 
   case 84: /* for_init: FLOAT ID '=' expr  */
-#line 579 "parser.y"
+#line 601 "parser.y"
                         {
         /* Inline declaration: for (float x = 0.0; ...) */
         addVar((yyvsp[-2].str), TYPE_FLOAT);
@@ -2182,11 +2204,11 @@ yyreduce:
         (yyval.node) = createStmtList(createDecl((yyvsp[-2].str), TYPE_FLOAT), createAssign((yyvsp[-2].str), (yyvsp[0].node)));
         free((yyvsp[-2].str));
     }
-#line 2186 "parser.tab.c"
+#line 2208 "parser.tab.c"
     break;
 
   case 85: /* for_init: ID '=' expr  */
-#line 586 "parser.y"
+#line 608 "parser.y"
                   {
         if (!isVarDeclared((yyvsp[-2].str))) {
             fprintf(stderr, "\n\u274c Semantic Error at line %d:\n", yyline);
@@ -2199,11 +2221,11 @@ yyreduce:
         (yyval.node) = createAssign((yyvsp[-2].str), (yyvsp[0].node));
         free((yyvsp[-2].str));
     }
-#line 2203 "parser.tab.c"
+#line 2225 "parser.tab.c"
     break;
 
   case 86: /* for_init: ID '[' expr ']' '=' expr  */
-#line 598 "parser.y"
+#line 620 "parser.y"
                                {
         if (!isVarDeclared((yyvsp[-5].str))) {
             fprintf(stderr, "\n\u274c Semantic Error at line %d:\n", yyline);
@@ -2214,29 +2236,29 @@ yyreduce:
         (yyval.node) = createArrayAssign((yyvsp[-5].str), (yyvsp[-3].node), (yyvsp[0].node));
         free((yyvsp[-5].str));
     }
-#line 2218 "parser.tab.c"
+#line 2240 "parser.tab.c"
     break;
 
   case 87: /* for_cond: %empty  */
-#line 612 "parser.y"
+#line 634 "parser.y"
                 { (yyval.node) = NULL; }
-#line 2224 "parser.tab.c"
+#line 2246 "parser.tab.c"
     break;
 
   case 88: /* for_cond: expr  */
-#line 613 "parser.y"
+#line 635 "parser.y"
                 { (yyval.node) = (yyvsp[0].node); }
-#line 2230 "parser.tab.c"
+#line 2252 "parser.tab.c"
     break;
 
   case 89: /* for_update: %empty  */
-#line 618 "parser.y"
+#line 640 "parser.y"
                 { (yyval.node) = NULL; }
-#line 2236 "parser.tab.c"
+#line 2258 "parser.tab.c"
     break;
 
   case 90: /* for_update: ID '=' expr  */
-#line 619 "parser.y"
+#line 641 "parser.y"
                   {
         if (!isVarDeclared((yyvsp[-2].str))) {
             fprintf(stderr, "\n\u274c Semantic Error at line %d:\n", yyline);
@@ -2249,11 +2271,11 @@ yyreduce:
         (yyval.node) = createAssign((yyvsp[-2].str), (yyvsp[0].node));
         free((yyvsp[-2].str));
     }
-#line 2253 "parser.tab.c"
+#line 2275 "parser.tab.c"
     break;
 
   case 91: /* for_update: ID '[' expr ']' '=' expr  */
-#line 631 "parser.y"
+#line 653 "parser.y"
                                {
         if (!isVarDeclared((yyvsp[-5].str))) {
             fprintf(stderr, "\n\u274c Semantic Error at line %d:\n", yyline);
@@ -2264,11 +2286,11 @@ yyreduce:
         (yyval.node) = createArrayAssign((yyvsp[-5].str), (yyvsp[-3].node), (yyvsp[0].node));
         free((yyvsp[-5].str));
     }
-#line 2268 "parser.tab.c"
+#line 2290 "parser.tab.c"
     break;
 
 
-#line 2272 "parser.tab.c"
+#line 2294 "parser.tab.c"
 
       default: break;
     }
@@ -2461,7 +2483,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 643 "parser.y"
+#line 665 "parser.y"
 
 
 /* Maximum number of displayed errors before the compiler gives up */

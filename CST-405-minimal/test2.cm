@@ -1,0 +1,146 @@
+/* Returns 7 if x > 0, otherwise returns 0 - 1                       */
+/* (unary minus not in grammar, so -1 is written as 0 - 1)           */
+int sign_test(int x) {
+    int result;
+    result = 0 - 1;
+    if (x > 0) {
+        result = 7;
+    }
+    return result;
+}
+
+/* ------------------------------------------------------------------ */
+int main() {
+    int a;
+    int b;
+    int r;
+
+    a = 10;
+    b = 5;
+
+    /* ---- Test 1: simple if (no else), condition TRUE ---------------- */
+    /* a (10) > b (5) is true, so r gets 1                              */
+    r = 0;
+    if (a > b) {
+        r = 1;
+    }
+    print(r);          /* expect: 1 */
+
+    /* ---- Test 2: if-else, condition TRUE ----------------------------- */
+    /* a (10) > b (5) is true -- then-branch executes                   */
+    r = 0;
+    if (a > b) {
+        r = 2;
+    } else {
+        r = 99;
+    }
+    print(r);          /* expect: 2 */
+
+    /* ---- Test 3: if-else, condition FALSE ---------------------------- */
+    /* b (5) > a (10) is false -- else-branch executes                  */
+    r = 0;
+    if (b > a) {
+        r = 99;
+    } else {
+        r = 3;
+    }
+    print(r);          /* expect: 3 */
+
+    /* ---- Test 4: nested if-else ------------------------------------- */
+    /* Outer: a > b  true (10 > 5)                                      */
+    /* Inner: a == 10  true                                             */
+    r = 0;
+    if (a > b) {
+        if (a == 10) {
+            r = 4;
+        } else {
+            r = 99;
+        }
+    } else {
+        r = 99;
+    }
+    print(r);          /* expect: 4 */
+
+    /* ---- Test 5: chained else-if ------------------------------------ */
+    /* a is 10; first branch false (a < 5), second false (a < 8),       */
+    /* third true (a < 15) -- r = 5                                     */
+    r = 0;
+    if (a < 5) {
+        r = 99;
+    } else {
+        if (a < 8) {
+            r = 99;
+        } else {
+            if (a < 15) {
+                r = 5;
+            } else {
+                r = 99;
+            }
+        }
+    }
+    print(r);          /* expect: 5 */
+
+    /* ---- Test 6: all six comparison operators ----------------------- */
+
+    /* Less-than: b (5) < a (10) */
+    r = 0;
+    if (b < a) {
+        r = 6;
+    }
+    print(r);          /* expect: 6 */
+
+    /* Less-than-or-equal: a (10) <= 10 */
+    r = 0;
+    if (a <= 10) {
+        r = 6;
+    }
+    print(r);          /* expect: 6 */
+
+    /* Greater-than: a (10) > b (5) */
+    r = 0;
+    if (a > b) {
+        r = 6;
+    }
+    print(r);          /* expect: 6 */
+
+    /* Greater-than-or-equal: a (10) >= 10 */
+    r = 0;
+    if (a >= 10) {
+        r = 6;
+    }
+    print(r);          /* expect: 6 */
+
+    /* Equal: a (10) == 10 */
+    r = 0;
+    if (a == 10) {
+        r = 6;
+    }
+    print(r);          /* expect: 6 */
+
+    /* Not-equal: a (10) != b (5) */
+    r = 0;
+    if (a != b) {
+        r = 6;
+    }
+    print(r);          /* expect: 6 */
+
+    /* ---- Test 7: if inside a function ------------------------------- */
+    /* sign_test(10) should return 7 because 10 > 0                     */
+    r = sign_test(a);
+    print(r);          /* expect: 7 */
+
+    /* ---- Test 8: dangling-else resolves to nearest if --------------- */
+    /* if (true) if (false) r=99 else r=8                               */
+    /* Outer true -- enter. Inner false -- take else -- r=8             */
+    r = 0;
+    if (a > b) {
+        if (b > a) {
+            r = 99;
+        } else {
+            r = 8;
+        }
+    }
+    print(r);          /* expect: 8 */
+
+    return 0;
+}
