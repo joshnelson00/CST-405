@@ -52,7 +52,7 @@ stringpool.o: stringpool.c stringpool.h
 	$(CC) $(CFLAGS) -c stringpool.c
 
 clean:
-	rm -f $(TARGET) $(OBJS) lex.yy.c parser.tab.c parser.tab.h *.s tac.txt tac-optimized.txt
+	rm -f $(TARGET) $(OBJS) lex.yy.c parser.tab.c parser.tab.h *.s *.tac.txt *.tac.optimized.txt tac.txt unoptimizedtac.txt tac-optimized.txt
 
 # ── Helper macro: compile + run one test ──────────────────────────────────────
 # Usage: $(call run_test, stem, expected)

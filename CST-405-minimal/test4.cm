@@ -1,0 +1,13 @@
+int main() {
+    int x;
+
+    x = 5;
+
+    if (1) {
+        print(x);
+    } else {
+        print(999);
+    }
+
+    return 0;
+}

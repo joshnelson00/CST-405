@@ -1,0 +1,14 @@
+int main() {
+	int a;
+	int b;
+	int c;
+	int d;
+
+	a = 10;
+	b = a;
+	c = b;
+	d = c + 5;
+
+	print(d);
+	return 0;
+}

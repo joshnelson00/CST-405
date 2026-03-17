@@ -75,6 +75,9 @@ int main(int argc, char* argv[]) {
     int total_errors = syntax_error_count + semantic_error_count;
     
     if (parse_result == 0 && total_errors == 0) {
+        const char* unoptimizedTacFile = "unoptimizedtac.txt";
+        const char* optimizedTacFile = "tac.txt";
+
         printf("✓ Parse successful - program is syntactically and semantically correct!\n\n");
         
         /* PHASE 2: AST Display */
@@ -101,9 +104,10 @@ int main(int argc, char* argv[]) {
         initTAC();
         generateTAC(root);
         printTAC();
-        printTACToFile2("tac.txt");
+        printTACToFile2(unoptimizedTacFile);
         end_benchmark(bench_tac, "Phase 3: TAC Generation");
         free(bench_tac);
+        printf("✓ Unoptimized TAC written to: %s\n", unoptimizedTacFile);
         printf("\n");
         
         /* PHASE 4: Optimization */
@@ -120,9 +124,10 @@ int main(int argc, char* argv[]) {
         BenchmarkResult* bench_opt = start_benchmark();
         optimizeTAC2();
         printOptimizedTAC2();
-        printOptimizedTACToFile2("tac-optimized.txt");
+        printOptimizedTACToFile2(optimizedTacFile);
         end_benchmark(bench_opt, "Phase 4: Optimization");
         free(bench_opt);
+        printf("✓ Optimized TAC written to: %s\n", optimizedTacFile);
         printf("\n");
         
         /* PHASE 5: Code Generation */
