@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CST-405 &mdash; Activity 2: Switch Statement Backend</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --surface2: #222636;
+      --border:   #2e3250;
+      --accent:   #6c8ef5;
+      --accent2:  #a78bfa;
+      --green:    #4ade80;
+      --red:      #f87171;
+      --yellow:   #fbbf24;
+      --cyan:     #22d3ee;
+      --teal:     #2dd4bf;
+      --text:     #e2e8f0;
+      --muted:    #94a3b8;
+      --mono:     'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+      --radius:   10px;
+    }
+
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 16px; line-height: 1.75;
+    }
+
+    .page-wrap { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border);
+      padding: 1.75rem 1.1rem; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+    .sidebar .logo { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--teal); margin-bottom: 0.2rem; }
+    .sidebar h2 { font-size: 0.95rem; color: var(--text); margin-bottom: 1.25rem; line-height: 1.3; }
+    .sidebar nav ul { list-style: none; }
+    .sidebar nav li { margin-bottom: 0.05rem; }
+    .sidebar nav a { display: block; padding: 0.3rem 0.55rem; border-radius: 6px;
+      color: var(--muted); text-decoration: none; font-size: 0.82rem;
+      transition: background 0.15s, color 0.15s; }
+    .sidebar nav a:hover { background: var(--surface2); color: var(--text); }
+    .sidebar nav .sec { font-size: 0.67rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--teal); padding: 0.85rem 0.55rem 0.2rem; }
+
+    /* ── Main ── */
+    main { padding: 2.75rem 3.5rem 6rem; max-width: 880px; }
+
+    /* ── Hero ── */
+    .hero { background: linear-gradient(135deg, #1a1d27, #0f1a20);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 2.25rem; margin-bottom: 2.75rem; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at top left, rgba(45,212,191,.10) 0%, transparent 55%); }
+    .badge { display: inline-flex; align-items: center; gap: 0.4rem;
+      background: rgba(45,212,191,.13); border: 1px solid rgba(45,212,191,.32);
+      color: var(--teal); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; padding: 0.2rem 0.75rem; border-radius: 999px; margin-bottom: 0.9rem; }
+    .hero h1 { font-size: 2rem; font-weight: 800; line-height: 1.15; margin-bottom: 0.6rem; }
+    .hero h1 span { color: var(--teal); }
+    .hero p { color: var(--muted); font-size: 1rem; max-width: 580px; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 1.25rem;
+      padding-top: 1.25rem; border-top: 1px solid var(--border);
+      font-size: 0.78rem; color: var(--muted); }
+    .hero-meta span { display: flex; align-items: center; gap: 0.35rem; }
+
+    /* ── Sections ── */
+    section { margin-bottom: 3rem; scroll-margin-top: 1.5rem; }
+    h2.sec-title { font-size: 1.35rem; font-weight: 700; color: var(--text);
+      margin-bottom: 0.9rem; display: flex; align-items: center; gap: 0.55rem; }
+    h2.sec-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    h3 { font-size: 1.05rem; font-weight: 600; color: var(--accent2); margin: 1.5rem 0 0.5rem; }
+    h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.4rem; }
+    p { margin-bottom: 0.9rem; color: var(--text); }
+
+    /* ── Cards ── */
+    .card { background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.4rem; margin-bottom: 0.85rem; }
+    .card.info  { border-left: 3px solid var(--accent); }
+    .card.warn  { border-left: 3px solid var(--yellow); }
+    .card.tip   { border-left: 3px solid var(--green); }
+    .card.task  { border-left: 3px solid var(--teal); }
+    .card.chal  { border-left: 3px solid var(--accent2); }
+    .card h4.info  { color: var(--accent); }
+    .card h4.warn  { color: var(--yellow); }
+    .card h4.tip   { color: var(--green); }
+    .card h4.task  { color: var(--teal); }
+    .card p, .card li { font-size: 0.875rem; color: var(--muted); margin-bottom: 0.3rem; }
+    .card ul, .card ol { padding-left: 1.2rem; }
+    .card li { margin-bottom: 0.25rem; }
+
+    /* ── Code blocks ── */
+    .code-block { background: #0d0f18; border: 1px solid var(--border);
+      border-radius: var(--radius); margin: 0.75rem 0 1.25rem; overflow: hidden; }
+    .cb-header { display: flex; justify-content: space-between; align-items: center;
+      padding: 0.45rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border);
+      font-size: 0.72rem; color: var(--muted); }
+    .cb-lang { font-weight: 700; color: var(--teal); font-family: var(--mono); }
+    .cb-note { font-style: italic; }
+    .code-block pre { padding: 1.1rem 1.35rem; overflow-x: auto;
+      font-family: var(--mono); font-size: 0.855rem; line-height: 1.65; }
+    .kw  { color: #c792ea; font-weight: 600; }
+    .ty  { color: #82aaff; }
+    .fn  { color: #82aaff; }
+    .num { color: #f78c6c; }
+    .str { color: #c3e88d; }
+    .cmt { color: #546e7a; font-style: italic; }
+    .op  { color: #89ddff; }
+    .lbl { color: #fbbf24; }
+    .hi  { background: rgba(45,212,191,0.15); border-radius: 3px; padding: 0 2px; }
+
+    /* ── Steps ── */
+    .step-grid { display: flex; flex-direction: column; gap: 0; margin: 1rem 0; }
+    .step { display: grid; grid-template-columns: 48px 1fr; gap: 0; position: relative; }
+    .step:not(:last-child) .step-line { position: absolute; left: 23px; top: 48px;
+      bottom: 0; width: 2px; background: var(--border); }
+    .step-num { width: 46px; height: 46px; border-radius: 50%; background: var(--surface2);
+      border: 2px solid var(--border); display: flex; align-items: center;
+      justify-content: center; font-weight: 800; font-size: 0.9rem; color: var(--teal);
+      flex-shrink: 0; margin-top: 0.1rem; position: relative; z-index: 1; }
+    .step-body { padding: 0 0 2rem 1.25rem; }
+    .step-body h3 { margin-top: 0.1rem; font-size: 1rem; color: var(--text); }
+    .step-body p { font-size: 0.875rem; }
+
+    /* ── Timeline ── */
+    .timeline { display: flex; flex-direction: column; gap: 0.4rem; margin: 1rem 0; }
+    .tl-row { display: flex; align-items: center; gap: 0.75rem; }
+    .tl-time { font-size: 0.72rem; font-family: var(--mono); color: var(--teal);
+      font-weight: 700; width: 70px; text-align: right; flex-shrink: 0; }
+    .tl-bar { flex: 1; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.35rem 0.75rem; font-size: 0.82rem; color: var(--muted); }
+    .tl-bar strong { color: var(--text); }
+
+    /* ── Callout ── */
+    .callout { display: flex; gap: 0.85rem; align-items: flex-start;
+      background: rgba(45,212,191,0.07); border: 1px solid rgba(45,212,191,0.22);
+      border-radius: var(--radius); padding: 0.9rem 1.1rem; margin: 1rem 0; }
+    .callout.warn { background: rgba(251,191,36,0.08); border-color: rgba(251,191,36,0.25); }
+    .callout.tip  { background: rgba(74,222,128,0.08);  border-color: rgba(74,222,128,0.25); }
+    .callout.blue { background: rgba(108,142,245,0.08); border-color: rgba(108,142,245,0.25); }
+    .callout .icon { font-size: 1.15rem; flex-shrink: 0; }
+    .callout p { margin: 0; font-size: 0.875rem; color: var(--muted); }
+    .callout strong { color: var(--text); }
+
+    /* ── TAC diagram ── */
+    .tac-diagram { background: #0d0f18; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1rem 0;
+      font-family: var(--mono); font-size: 0.84rem; line-height: 1.85; }
+    .tac-section { color: var(--muted); font-style: italic; }
+    .tac-instr { color: var(--text); }
+    .tac-label { color: var(--lbl); font-weight: 700; }
+    .tac-kw { color: #c792ea; font-weight: 600; }
+    .tac-cmt { color: #546e7a; }
+
+    /* ── Challenge ── */
+    .challenge-banner { background: linear-gradient(135deg, rgba(167,139,250,0.12), rgba(108,142,245,0.08));
+      border: 2px solid var(--accent2); border-radius: var(--radius); padding: 2rem;
+      margin-top: 1rem; position: relative; overflow: hidden; }
+    .challenge-banner::before { content: '★ CHALLENGE ★'; position: absolute; top: 0.6rem; right: 1rem;
+      font-size: 0.65rem; font-weight: 800; letter-spacing: 0.15em; color: var(--accent2); opacity: 0.5; }
+    .challenge-banner h3 { color: var(--accent2); font-size: 1.15rem; margin-top: 0; margin-bottom: 0.5rem; }
+    .challenge-banner p  { color: var(--muted); font-size: 0.9rem; }
+    .challenge-banner ul { padding-left: 1.2rem; }
+    .challenge-banner li { color: var(--muted); font-size: 0.875rem; margin-bottom: 0.4rem; }
+
+    /* ── Deliverable ── */
+    .deliverable { background: var(--surface); border: 2px solid var(--green);
+      border-radius: var(--radius); padding: 1.5rem; margin-top: 1rem; }
+    .deliverable h3 { color: var(--green); font-size: 1.05rem; margin-top: 0; margin-bottom: 0.75rem; }
+    .deliverable li { color: var(--muted); font-size: 0.875rem; margin-bottom: 0.35rem; }
+    .deliverable ul { padding-left: 1.2rem; }
+
+    .file { display: inline-block; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.15em 0.55em; font-family: var(--mono);
+      font-size: 0.82em; color: var(--cyan); }
+    code { font-family: var(--mono); font-size: 0.875em; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 4px; padding: 0.1em 0.4em; color: var(--cyan); }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (max-width: 860px) {
+      .page-wrap { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      main { padding: 2rem 1.25rem 4rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <p class="logo">CST-405 &bull; Activity 2</p>
+    <h2>Switch: Semantic, TAC &amp; Codegen</h2>
+    <nav><ul>
+      <li><span class="sec">Overview</span></li>
+      <li><a href="#intro">Introduction</a></li>
+      <li><a href="#timeline">Timeline</a></li>
+      <li><a href="#concept">Core Concepts</a></li>
+      <li><span class="sec">Tasks</span></li>
+      <li><a href="#task1">Task 1 — Semantic</a></li>
+      <li><a href="#task2">Task 2 — Break Stack</a></li>
+      <li><a href="#task3">Task 3 — Switch TAC</a></li>
+      <li><a href="#task4">Task 4 — Break TAC</a></li>
+      <li><a href="#task5">Task 5 — Test &amp; Debug</a></li>
+      <li><span class="sec">Extras</span></li>
+      <li><a href="#challenge">Challenge</a></li>
+      <li><a href="#deliverables">Deliverables</a></li>
+    </ul></nav>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main>
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="badge">&#9881; In-Class Activity &bull; Part 2 of 2</div>
+      <h1>Switch Statements:<br><span>Semantic Analysis, TAC &amp; Code Generation</span></h1>
+      <p>
+        Make switch statements <em>execute correctly</em> by implementing semantic validation,
+        a three-address code dispatch table, and verifying the generated MIPS assembly.
+      </p>
+      <div class="hero-meta">
+        <span>&#128336; ~75 minutes</span>
+        <span>&#128193; semantic.c &bull; tac.c</span>
+        <span>&#128101; Individual or pairs</span>
+      </div>
+    </div>
+
+    <!-- ── Intro ── -->
+    <section id="intro">
+      <h2 class="sec-title">Introduction</h2>
+      <p>
+        In Activity 1 you built the front end: the lexer recognizes switch keywords, the
+        parser builds a grammar-correct parse tree, and the AST stores switch/case/break
+        nodes. But your compiler still cannot <em>compile</em> a switch — if you try, the
+        semantic and TAC phases silently ignore the new nodes.
+      </p>
+      <p>
+        Today you will complete the implementation. After this session your compiler will
+        validate switch semantics, generate correct TAC, and produce working MIPS assembly
+        for switch statements — including fall-through and break.
+      </p>
+      <div class="callout">
+        <div class="icon">&#128204;</div>
+        <p>
+          <strong>Prerequisite:</strong> Activity 1 must be complete. Run <code>make</code>
+          — it must succeed and print a correct AST for a switch input before you begin.
+          Today's edits go into two files: <span class="file">semantic.c</span> and
+          <span class="file">tac.c</span>. The code generator does <strong>not</strong>
+          need changes — it already handles all the TAC instructions switch uses.
+        </p>
+      </div>
+    </section>
+
+    <!-- ── Timeline ── -->
+    <section id="timeline">
+      <h2 class="sec-title">Session Timeline</h2>
+      <div class="timeline">
+        <div class="tl-row">
+          <div class="tl-time">0 – 10 min</div>
+          <div class="tl-bar"><strong>Concept review</strong> &mdash; study the TAC pattern; discuss with your neighbor</div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-time">10 – 30 min</div>
+          <div class="tl-bar"><strong>Task 1</strong> &mdash; semantic analysis (duplicate cases, break context, default warning)</div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-time">30 – 40 min</div>
+          <div class="tl-bar"><strong>Task 2</strong> &mdash; break label stack in tac.c</div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-time">40 – 60 min</div>
+          <div class="tl-bar"><strong>Task 3</strong> &mdash; switch TAC generation (dispatch table + case bodies)</div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-time">60 – 65 min</div>
+          <div class="tl-bar"><strong>Task 4</strong> &mdash; break TAC generation + update for/while</div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-time">65 – 70 min</div>
+          <div class="tl-bar"><strong>Task 5</strong> &mdash; build, test, and read the generated MIPS</div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-time">70 – 75 min</div>
+          <div class="tl-bar"><strong>Challenge</strong> &mdash; jump table optimization or continue statement</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Concepts ── -->
+    <section id="concept">
+      <h2 class="sec-title">Core Concepts</h2>
+
+      <h3>Semantic checks needed for switch</h3>
+      <div class="card info">
+        <h4 class="info">Three rules to enforce</h4>
+        <ul>
+          <li><strong>Duplicate case values</strong> &mdash; two <code>case 5:</code> labels in the same switch is an error. Keep a seen-values array and check each new case against it.</li>
+          <li><strong>Duplicate default</strong> &mdash; a switch can have at most one <code>default:</code> clause.</li>
+          <li><strong>Break context</strong> &mdash; <code>break</code> is only valid inside a switch, for, or while. Use a depth counter: increment on entry, decrement on exit, error if break is found at depth 0.</li>
+          <li><strong>Missing default (warning only)</strong> &mdash; a switch without a <code>default</code> silently ignores unmatched values. Warn the programmer.</li>
+        </ul>
+      </div>
+
+      <h3>TAC pattern for switch</h3>
+      <p>
+        A switch is lowered to a <strong>linear-scan dispatch table</strong> followed by
+        the <strong>case bodies in order</strong>. The dispatch table compares the controlling
+        expression against each case constant and jumps directly to the matching body.
+        Case bodies are laid out sequentially so that fall-through (no break) is achieved
+        simply by <em>not</em> emitting a jump at the end of a body.
+      </p>
+
+      <div class="tac-diagram">
+        <span class="tac-cmt"># ─── Example: switch(x) { case 1: P(10); break; case 2: P(20); default: P(0); }</span><br><br>
+        <span class="tac-section"># Evaluate controlling expression (stored in a named variable to survive labels)</span><br>
+        <span class="tac-instr">DECL __sw0</span><br>
+        <span class="tac-instr">__sw0 = x</span><br><br>
+        <span class="tac-section"># ─── Dispatch table ───</span><br>
+        <span class="tac-instr">t0 = __sw0 == 1</span><br>
+        <span class="tac-kw">IF_FALSE</span> <span class="tac-instr">t0 </span><span class="tac-kw">GOTO</span> <span class="tac-label">L_test2</span><br>
+        <span class="tac-kw">GOTO</span> <span class="tac-label">L_body0</span>   <span class="tac-cmt">    # case 1 matched</span><br>
+        <span class="tac-label">L_test2:</span><br>
+        <span class="tac-instr">t0 = __sw0 == 2</span><br>
+        <span class="tac-kw">IF_FALSE</span> <span class="tac-instr">t0 </span><span class="tac-kw">GOTO</span> <span class="tac-label">L_done</span><br>
+        <span class="tac-kw">GOTO</span> <span class="tac-label">L_body1</span>   <span class="tac-cmt">    # case 2 matched</span><br>
+        <span class="tac-label">L_done:</span><br>
+        <span class="tac-kw">GOTO</span> <span class="tac-label">L_default</span>  <span class="tac-cmt">  # no case matched → go to default</span><br><br>
+        <span class="tac-section"># ─── Case bodies ───</span><br>
+        <span class="tac-label">L_body0:</span>   <span class="tac-cmt">                # body for case 1</span><br>
+        <span class="tac-instr">&nbsp;&nbsp;PRINT 10</span><br>
+        <span class="tac-kw">&nbsp;&nbsp;GOTO</span> <span class="tac-label">L_end</span>      <span class="tac-cmt">   # ← emitted by NODE_BREAK</span><br>
+        <span class="tac-label">L_body1:</span>   <span class="tac-cmt">                # body for case 2 (no break → falls through to default)</span><br>
+        <span class="tac-instr">&nbsp;&nbsp;PRINT 20</span><br>
+        <span class="tac-label">L_default:</span> <span class="tac-cmt">               # default body</span><br>
+        <span class="tac-instr">&nbsp;&nbsp;PRINT 0</span><br>
+        <span class="tac-label">L_end:</span>
+      </div>
+
+      <div class="callout warn">
+        <div class="icon">&#9888;</div>
+        <p>
+          <strong>Why a named variable for the controlling expression?</strong>
+          TAC temporaries (<code>t0</code>, <code>t1</code>…) live only in registers. Every
+          <code>TAC_LABEL</code> in the code generator calls <code>invalidateAllRegisters()</code>,
+          so a temporary would be lost after the first label in the dispatch table.
+          By storing the result in a declared variable (<code>__sw0</code>), the code generator
+          always reloads it from its stack slot — correctly, on any path.
+        </p>
+      </div>
+
+      <h3>The break label stack</h3>
+      <p>
+        A <code>break</code> statement must jump to the <em>end</em> of its enclosing
+        switch or loop. Because switches can be nested inside loops and vice versa,
+        you need a stack of "break targets":
+      </p>
+      <div class="code-block">
+        <div class="cb-header"><span class="cb-lang">Concept &mdash; break label stack operation</span></div>
+        <pre>
+<span class="cmt">/* Entering a switch */</span>
+push(L_switch_end);
+    generate_case_bodies();   <span class="cmt">// any break here GETOs L_switch_end</span>
+pop();
+
+<span class="cmt">/* Entering a for loop */</span>
+push(L_for_end);
+    generate_body();          <span class="cmt">// any break here GOTOs L_for_end</span>
+pop();
+
+<span class="cmt">/* break inside a switch inside a for loop */</span>
+<span class="cmt">// Stack: [L_for_end, L_switch_end]</span>
+<span class="cmt">// peek() returns L_switch_end → break exits the switch, not the loop ✓</span>
+</pre>
+      </div>
+    </section>
+
+    <!-- ── Task 1 ── -->
+    <section id="task1">
+      <h2 class="sec-title">Task 1 &mdash; Semantic Analysis <span class="file">semantic.c</span></h2>
+
+      <div class="step-grid">
+
+        <div class="step">
+          <div class="step-line"></div>
+          <div class="step-num">A</div>
+          <div class="step-body">
+            <h3>Add a <code>breakDepth</code> counter</h3>
+            <p>
+              At the top of <span class="file">semantic.c</span>, near the other global state
+              variables (<code>inFunction</code>, <code>scopeDepth</code>, etc.), add:
+            </p>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">semantic.c &mdash; global state</span></div>
+              <pre>
+<span class="cmt">/* Depth of break-valid contexts (switch, for, while).
+ * break is only valid when breakDepth > 0. */</span>
+<span class="kw">static</span> <span class="ty">int</span> breakDepth = <span class="num">0</span>;
+</pre>
+            </div>
+            <p>Also reset it to <code>0</code> inside <code>initSemantic()</code>.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-line"></div>
+          <div class="step-num">B</div>
+          <div class="step-body">
+            <h3>Add <code>NODE_BREAK</code> to <code>checkStmt()</code></h3>
+            <p>Inside the <code>switch(node->type)</code> in <code>checkStmt()</code>:</p>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">semantic.c &mdash; NODE_BREAK check</span></div>
+              <pre>
+<span class="kw">case</span> NODE_BREAK:
+    <span class="kw">if</span> (breakDepth == <span class="num">0</span>) {
+        fprintf(stderr, <span class="str">"\n╔════════════════════════════════════════╗\n"</span>);
+        fprintf(stderr, <span class="str">"║ SEMANTIC ERROR - break outside context ║\n"</span>);
+        fprintf(stderr, <span class="str">"╚════════════════════════════════════════╝\n"</span>);
+        fprintf(stderr, <span class="str">"  📍 Location: Line %d\n"</span>, node->lineno);
+        fprintf(stderr, <span class="str">"  ❌ 'break' must be inside a switch, for, or while\n\n"</span>);
+        semInfo.errorCount++;
+    } <span class="kw">else</span> {
+        printf(<span class="str">"  ✓ break at line %d\n"</span>, node->lineno);
+    }
+    <span class="kw">break</span>;
+</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-line"></div>
+          <div class="step-num">C</div>
+          <div class="step-body">
+            <h3>Add <code>NODE_SWITCH</code> to <code>checkStmt()</code></h3>
+            <p>
+              This is the most complex semantic check. Walk the case-clause linked list,
+              tracking seen values. The structure to implement:
+            </p>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">semantic.c &mdash; NODE_SWITCH check (skeleton)</span></div>
+              <pre>
+<span class="kw">case</span> NODE_SWITCH: {
+    printf(<span class="str">"  ✓ Checking switch statement at line %d\n"</span>, node->lineno);
+
+    <span class="cmt">/* 1. Check the controlling expression */</span>
+    checkExpr(node->data.switch_stmt.expr);
+
+    <span class="cmt">/* 2. Walk case clauses */</span>
+    <span class="ty">int</span> seenValues[<span class="num">512</span>];
+    <span class="ty">int</span> seenCount = <span class="num">0</span>;
+    <span class="ty">int</span> hasDefault = <span class="num">0</span>;
+    ASTNode* c = node->data.switch_stmt.cases;
+
+    breakDepth++;   <span class="cmt">/* break is now valid inside case bodies */</span>
+    <span class="kw">while</span> (c) {
+        <span class="kw">if</span> (c->data.case_clause.isDefault) {
+            <span class="cmt">/* TODO: check for duplicate default */</span>
+        } <span class="kw">else</span> {
+            <span class="cmt">/* TODO: check for duplicate case value using seenValues[] */</span>
+            <span class="cmt">/* TODO: add this case value to seenValues[] */</span>
+        }
+        <span class="cmt">/* TODO: recursively check the case body */</span>
+        c = c->data.case_clause.next;
+    }
+    breakDepth--;
+
+    <span class="cmt">/* 3. Warn if no default clause */</span>
+    <span class="kw">if</span> (!hasDefault) {
+        fprintf(stderr, <span class="str">"  ⚠  Warning: switch at line %d has no default clause\n\n"</span>,
+                node->lineno);
+        semInfo.warningCount++;
+    }
+    <span class="kw">break</span>;
+}
+</pre>
+            </div>
+
+            <div class="card task" style="margin-top:0.75rem;">
+              <h4 class="task">Your job</h4>
+              <p>Fill in the three <code>TODO</code> sections. For the duplicate-case check, compare each new case value against every value already in <code>seenValues[]</code> using a loop. For the error message, match the style of existing error messages in the file (the decorative box format).</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">D</div>
+          <div class="step-body">
+            <h3>Update <code>NODE_FOR</code> and <code>NODE_WHILE</code></h3>
+            <p>
+              Find the existing <code>NODE_FOR</code> and <code>NODE_WHILE</code> cases in
+              <code>checkStmt()</code>. Wrap the <code>checkStmt(body)</code> call with
+              <code>breakDepth++</code> before and <code>breakDepth--</code> after, so that
+              a <code>break</code> inside a loop is also valid:
+            </p>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">semantic.c &mdash; while body check (update)</span></div>
+              <pre>
+<span class="cmt">/* before: */</span>
+checkStmt(node->data.while_stmt.body);
+
+<span class="cmt">/* after: */</span>
+<span class="hi">breakDepth++;</span>
+checkStmt(node->data.while_stmt.body);
+<span class="hi">breakDepth--;</span>
+</pre>
+            </div>
+            <p>Apply the same change to the <code>NODE_FOR</code> body check.</p>
+          </div>
+        </div>
+
+      </div><!-- end step-grid -->
+
+      <h3>Testing semantic errors</h3>
+      <div class="code-block">
+        <div class="cb-header"><span class="cb-lang">test_sem_errors.c &mdash; create and compile this</span></div>
+        <pre>
+<span class="ty">int</span> main() {
+    <span class="ty">int</span> x;
+    x = <span class="num">3</span>;
+
+    <span class="cmt">/* ERROR 1: duplicate case value */</span>
+    <span class="kw">switch</span> (x) {
+        <span class="kw">case</span> <span class="num">1</span>: print(<span class="num">1</span>); <span class="kw">break</span>;
+        <span class="kw">case</span> <span class="num">1</span>: print(<span class="num">2</span>); <span class="kw">break</span>;   <span class="cmt">/* ← duplicate */</span>
+        <span class="kw">default</span>: print(<span class="num">0</span>); <span class="kw">break</span>;
+    }
+
+    <span class="cmt">/* ERROR 2: break outside any switch/loop */</span>
+    <span class="kw">break</span>;
+
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+</pre>
+      </div>
+
+      <div class="card tip">
+        <h4 class="tip">Expected output</h4>
+        <p>The compiler should report two semantic errors and halt before generating code.
+        The summary line should read: <code>✗ Semantic analysis failed</code>.</p>
+      </div>
+    </section>
+
+    <!-- ── Task 2 ── -->
+    <section id="task2">
+      <h2 class="sec-title">Task 2 &mdash; Break Label Stack <span class="file">tac.c</span></h2>
+
+      <p>
+        Open <span class="file">tac.c</span>. Add the three stack helper functions near the
+        top of the file, just before the forward declarations section.
+      </p>
+
+      <div class="code-block">
+        <div class="cb-header"><span class="cb-lang">tac.c &mdash; break label stack</span></div>
+        <pre>
+<span class="cmt">/* ── Break Label Stack ─────────────────────────────────────
+ * Tracks the "end" label of each enclosing switch/for/while.
+ * NODE_BREAK emits GOTO to peekBreakLabel().
+ * Push on entry to each construct, pop on exit.
+ */</span>
+<span class="kw">#define</span> MAX_BREAK_DEPTH <span class="num">64</span>
+<span class="kw">static</span> <span class="ty">char</span>* breakLabelStack[MAX_BREAK_DEPTH];
+<span class="kw">static</span> <span class="ty">int</span>   breakLabelTop = <span class="num">0</span>;
+
+<span class="kw">static void</span> pushBreakLabel(<span class="ty">char</span>* label) {
+    <span class="kw">if</span> (breakLabelTop < MAX_BREAK_DEPTH)
+        breakLabelStack[breakLabelTop++] = label;
+    <span class="kw">else</span>
+        fprintf(stderr, <span class="str">"TAC Error: break stack overflow\n"</span>);
+}
+
+<span class="kw">static</span> <span class="ty">char</span>* peekBreakLabel() {
+    <span class="kw">return</span> (breakLabelTop > <span class="num">0</span>) ? breakLabelStack[breakLabelTop - <span class="num">1</span>] : NULL;
+}
+
+<span class="kw">static void</span> popBreakLabel() {
+    <span class="kw">if</span> (breakLabelTop > <span class="num">0</span>) breakLabelTop--;
+}
+</pre>
+      </div>
+
+      <div class="callout blue">
+        <div class="icon">&#128204;</div>
+        <p>
+          <strong>Important:</strong> The label strings stored in this stack are heap-allocated
+          by <code>newLabel()</code>. Do <strong>not</strong> free them before emitting the
+          end label — the TAC instruction that references them keeps pointers to the same
+          string via <code>strdup()</code> inside <code>createTAC()</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- ── Task 3 ── -->
+    <section id="task3">
+      <h2 class="sec-title">Task 3 &mdash; Switch TAC Generation <span class="file">tac.c</span></h2>
+
+      <p>
+        Inside <code>generateTACStmt()</code>, add a <code>case NODE_SWITCH:</code> handler
+        before the existing <code>default:</code> at the bottom. Work through these steps:
+      </p>
+
+      <div class="step-grid">
+
+        <div class="step">
+          <div class="step-line"></div>
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h3>Evaluate the controlling expression into a named variable</h3>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">tac.c &mdash; step 1</span></div>
+              <pre>
+<span class="cmt">/* Declare a hidden variable to hold the switch value across labels */</span>
+<span class="ty">char</span> switchVar[<span class="num">32</span>];
+sprintf(switchVar, <span class="str">"__sw%d"</span>, tacList.labelCount);
+appendTAC(createTAC(TAC_DECL, NULL, NULL, switchVar));
+
+<span class="ty">char</span>* exprVal = generateTACExpr(node->data.switch_stmt.expr);
+appendTAC(createTAC(TAC_ASSIGN, exprVal, NULL, switchVar));
+freeTemp(exprVal);
+</pre>
+            </div>
+            <p>
+              <strong>Why not a TAC temp?</strong> TAC temps disappear across labels because
+              the code generator calls <code>invalidateAllRegisters()</code> at every
+              <code>TAC_LABEL</code>. A declared variable lives in memory and is always
+              reloaded correctly.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-line"></div>
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h3>Pre-allocate one body label per case</h3>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">tac.c &mdash; step 2</span></div>
+              <pre>
+<span class="cmt">/* Count cases and allocate arrays */</span>
+<span class="ty">int</span> caseCount = <span class="num">0</span>;
+ASTNode* c = node->data.switch_stmt.cases;
+<span class="kw">while</span> (c) { caseCount++; c = c->data.case_clause.next; }
+
+<span class="ty">char</span>** bodyLabels = (<span class="ty">char</span>**)malloc(<span class="kw">sizeof</span>(<span class="ty">char</span>*) * caseCount);
+ASTNode** caseArr  = (ASTNode**)malloc(<span class="kw">sizeof</span>(ASTNode*) * caseCount);
+<span class="ty">int</span>   defaultIdx  = -<span class="num">1</span>;
+
+c = node->data.switch_stmt.cases;
+<span class="kw">for</span> (<span class="ty">int</span> i = <span class="num">0</span>; i &lt; caseCount; i++) {
+    bodyLabels[i] = newLabel();
+    caseArr[i]    = c;
+    <span class="kw">if</span> (c->data.case_clause.isDefault) defaultIdx = i;
+    c = c->data.case_clause.next;
+}
+
+<span class="ty">char</span>* labelDispatchDone = newLabel();
+<span class="ty">char</span>* labelEnd          = newLabel();
+</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-line"></div>
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h3>Emit the dispatch table</h3>
+            <p>
+              For each non-default case: emit a comparison, a conditional branch to the
+              "next test" label (or <code>labelDispatchDone</code> for the last case), and a
+              <code>GOTO</code> to the matching body label.
+            </p>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">tac.c &mdash; step 3 (skeleton)</span></div>
+              <pre>
+<span class="cmt">/* Collect indices of non-default cases */</span>
+<span class="ty">int</span>* nonDef    = (<span class="ty">int</span>*)malloc(<span class="kw">sizeof</span>(<span class="ty">int</span>) * caseCount);
+<span class="ty">int</span>  nonDefCnt = <span class="num">0</span>;
+<span class="kw">for</span> (<span class="ty">int</span> i = <span class="num">0</span>; i &lt; caseCount; i++)
+    <span class="kw">if</span> (!caseArr[i]->data.case_clause.isDefault)
+        nonDef[nonDefCnt++] = i;
+
+<span class="kw">for</span> (<span class="ty">int</span> ni = <span class="num">0</span>; ni &lt; nonDefCnt; ni++) {
+    <span class="ty">int</span>     i   = nonDef[ni];
+    ASTNode* cas = caseArr[i];
+
+    <span class="cmt">/* TODO: build the case constant string */</span>
+    <span class="ty">char</span> caseConst[<span class="num">32</span>];
+    sprintf(caseConst, <span class="str">"%d"</span>, cas->data.case_clause.value);
+
+    <span class="cmt">/* TODO: emit TAC_EQ: cmpTemp = switchVar == caseConst */</span>
+
+    <span class="cmt">/* Determine fail label: next test or dispatch done */</span>
+    <span class="ty">char</span>* failLabel = (ni &lt; nonDefCnt - <span class="num">1</span>) ? newLabel() : labelDispatchDone;
+
+    <span class="cmt">/* TODO: emit TAC_IF_FALSE: if NOT equal, jump to failLabel */</span>
+
+    <span class="cmt">/* TODO: emit TAC_GOTO to bodyLabels[i] (match found) */</span>
+
+    <span class="cmt">/* Emit fail label (used as next case's test entry) */</span>
+    <span class="kw">if</span> (ni &lt; nonDefCnt - <span class="num">1</span>)
+        appendTAC(createTAC(TAC_LABEL, NULL, NULL, failLabel));
+}
+
+<span class="cmt">/* No case matched → go to default or end */</span>
+appendTAC(createTAC(TAC_LABEL, NULL, NULL, labelDispatchDone));
+<span class="kw">if</span> (defaultIdx >= <span class="num">0</span>)
+    appendTAC(createTAC(TAC_GOTO, bodyLabels[defaultIdx], NULL, NULL));
+<span class="kw">else</span>
+    appendTAC(createTAC(TAC_GOTO, labelEnd, NULL, NULL));
+</pre>
+            </div>
+            <div class="card task" style="margin-top:0.75rem;">
+              <h4 class="task">Your job</h4>
+              <p>Fill in the three <code>TODO</code> sections. Use <code>allocTemp()</code> / <code>freeTemp()</code> for the comparison temporary. Look at the existing <code>NODE_IF</code> handler for reference on emitting <code>TAC_EQ</code> + <code>TAC_IF_FALSE</code>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <h3>Emit case bodies</h3>
+            <p>
+              Push <code>labelEnd</code> as the break target, then emit each case body in
+              original order. Fall-through is automatic: if a body ends without a
+              <code>NODE_BREAK</code>, execution simply falls to the next label.
+            </p>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">tac.c &mdash; step 4</span></div>
+              <pre>
+pushBreakLabel(labelEnd);
+<span class="kw">for</span> (<span class="ty">int</span> i = <span class="num">0</span>; i &lt; caseCount; i++) {
+    appendTAC(createTAC(TAC_LABEL, NULL, NULL, bodyLabels[i]));
+    <span class="kw">if</span> (caseArr[i]->data.case_clause.body)
+        generateTACStmt(caseArr[i]->data.case_clause.body);
+}
+popBreakLabel();
+
+appendTAC(createTAC(TAC_LABEL, NULL, NULL, labelEnd));
+
+free(bodyLabels);
+free(caseArr);
+free(nonDef);
+<span class="kw">break</span>;
+</pre>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end step-grid -->
+    </section>
+
+    <!-- ── Task 4 ── -->
+    <section id="task4">
+      <h2 class="sec-title">Task 4 &mdash; Break TAC &amp; Loop Updates <span class="file">tac.c</span></h2>
+
+      <div class="step-grid">
+
+        <div class="step">
+          <div class="step-line"></div>
+          <div class="step-num">A</div>
+          <div class="step-body">
+            <h3>Add <code>NODE_BREAK</code> handler</h3>
+            <p>
+              Add a case to <code>generateTACStmt()</code> for <code>NODE_BREAK</code>.
+              It emits a single unconditional jump to the current break target:
+            </p>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">tac.c &mdash; NODE_BREAK</span></div>
+              <pre>
+<span class="kw">case</span> NODE_BREAK: {
+    <span class="ty">char</span>* target = peekBreakLabel();
+    <span class="kw">if</span> (target) {
+        appendTAC(createTAC(TAC_GOTO, target, NULL, NULL));
+    } <span class="kw">else</span> {
+        fprintf(stderr, <span class="str">"TAC Error: break without enclosing context\n"</span>);
+    }
+    <span class="kw">break</span>;
+}
+</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">B</div>
+          <div class="step-body">
+            <h3>Push break labels in <code>NODE_FOR</code> and <code>NODE_WHILE</code></h3>
+            <p>
+              Find the <code>NODE_WHILE</code> and <code>NODE_FOR</code> handlers in
+              <code>generateTACStmt()</code>. Each already has a <code>labelEnd</code>. Wrap
+              the body generation with push/pop:
+            </p>
+            <div class="code-block">
+              <div class="cb-header"><span class="cb-lang">tac.c &mdash; while body (update)</span></div>
+              <pre>
+<span class="cmt">/* before: */</span>
+generateTACStmt(node->data.while_stmt.body);
+
+<span class="cmt">/* after: */</span>
+<span class="hi">pushBreakLabel(labelEnd);</span>
+generateTACStmt(node->data.while_stmt.body);
+<span class="hi">popBreakLabel();</span>
+</pre>
+            </div>
+            <p>Apply the same change inside <code>NODE_FOR</code>.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── Task 5 ── -->
+    <section id="task5">
+      <h2 class="sec-title">Task 5 &mdash; Build, Test &amp; Read the MIPS</h2>
+
+      <h3>Build</h3>
+      <div class="code-block">
+        <div class="cb-header"><span class="cb-lang">Terminal</span></div>
+        <pre>
+$ make clean && make
+$ make test-switch
+</pre>
+      </div>
+
+      <h3>Trace through the output</h3>
+      <p>
+        Open the generated <span class="file">test_switch.s</span> file. Find the section
+        for <code>Test 1</code> (the simple dispatch). Answer the following questions with
+        your partner:
+      </p>
+      <div class="card info">
+        <h4 class="info">Reading comprehension questions</h4>
+        <ol style="padding-left:1.2rem;">
+          <li>What instruction loads the switch variable (<code>__sw0</code>) into a register?</li>
+          <li>What instruction performs the equality comparison for <code>case 2</code>?</li>
+          <li>What is the MIPS branch instruction used by <code>TAC_IF_FALSE</code>?</li>
+          <li>Which label is the break target for this switch? How can you tell?</li>
+          <li>What happens in the assembly if execution reaches <code>case 1</code>'s body label but the <code>beqz</code> for case 1 was not taken? (Trace the control flow.)</li>
+        </ol>
+      </div>
+
+      <h3>Verify fall-through</h3>
+      <p>Create a small test with a fall-through case and look at the generated assembly:</p>
+      <div class="code-block">
+        <div class="cb-header"><span class="cb-lang">fall_through_test.c</span></div>
+        <pre>
+<span class="ty">int</span> main() {
+    <span class="ty">int</span> x;
+    x = <span class="num">4</span>;
+    <span class="kw">switch</span> (x) {
+        <span class="kw">case</span> <span class="num">4</span>:              <span class="cmt">// no break → falls through</span>
+        <span class="kw">case</span> <span class="num">5</span>: print(<span class="num">99</span>); <span class="kw">break</span>;
+        <span class="kw">default</span>: print(<span class="num">0</span>);
+    }
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+</pre>
+      </div>
+
+      <div class="card tip">
+        <h4 class="tip">What to look for in the MIPS output</h4>
+        <ul>
+          <li>The label for <code>case 4</code>'s body should appear <strong>immediately before</strong> the label for <code>case 5</code>'s body with no jump between them — that is fall-through.</li>
+          <li>The dispatch table should have two <code>beqz</code> instructions (one per non-default case) before the dispatch-done label.</li>
+          <li>Only <code>case 5</code>'s body should contain a <code>j L_end</code> (the break). <code>case 4</code>'s body should be empty.</li>
+        </ul>
+      </div>
+
+      <h3>Common bugs</h3>
+      <div class="card warn">
+        <h4 class="warn">Debugging checklist</h4>
+        <ul>
+          <li><strong>Segfault during TAC generation</strong> → check that you <code>free()</code> all three malloc'd arrays (<code>bodyLabels</code>, <code>caseArr</code>, <code>nonDef</code>) after the end label is emitted.</li>
+          <li><strong>Wrong value printed</strong> → the switch variable (<code>__sw0</code>) is being read before the controlling expression is stored. Make sure <code>TAC_ASSIGN</code> appears before any comparison instructions.</li>
+          <li><strong>All cases print the default body</strong> → the dispatch table is jumping to the wrong body label. Double-check that <code>bodyLabels[i]</code> corresponds to <code>caseArr[i]</code>.</li>
+          <li><strong>break inside loop exits the whole function</strong> → you forgot to push the loop's <code>labelEnd</code> onto the break stack in <code>NODE_FOR</code> / <code>NODE_WHILE</code>.</li>
+          <li><strong>"TAC Error: break without enclosing context"</strong> → the semantic phase should have caught this; check that <code>breakDepth</code> is incremented in <code>NODE_SWITCH</code> before checking case bodies.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ── Challenge ── -->
+    <section id="challenge">
+      <h2 class="sec-title">Challenge</h2>
+      <div class="challenge-banner">
+        <h3>Optimize the Dispatch: Dense Jump Table Detection</h3>
+        <p>
+          Your current implementation always uses a <em>linear scan</em> — it compares the
+          switch variable against every case constant in order. Real compilers switch
+          strategies based on the density of case values. A <strong>dense</strong> set of
+          cases (e.g., 1, 2, 3, 4, 5) can be dispatched in O(1) using a jump table; a
+          <strong>sparse</strong> set benefits from a binary search or linear scan.
+        </p>
+        <p style="margin-top:0.75rem;"><strong>Your challenge — choose one:</strong></p>
+        <ul>
+          <li>
+            <strong>Option A — Jump table detection:</strong>
+            Before emitting the dispatch table, calculate the density ratio:
+            <code>(number of non-default cases) / (max_value - min_value + 1)</code>.
+            If the ratio is &ge; 0.5, print a message like
+            <em>"Note: switch at line N is dense enough for a jump table (density 0.80)"</em>.
+            You do not need to generate the actual jump table — just detect and report it.
+          </li>
+          <li>
+            <strong>Option B — Warn on implicit fall-through:</strong>
+            During TAC generation, after generating each case body, check if the body's last
+            statement is <em>not</em> a <code>NODE_BREAK</code> or <code>NODE_RETURN</code>.
+            If so, print a warning:
+            <em>"Warning: case N at line M falls through to the next case — add break; if intentional."</em>
+          </li>
+          <li>
+            <strong>Option C — continue statement:</strong>
+            Add a <code>continue</code> statement to the language that jumps to the top of
+            the enclosing <code>for</code> or <code>while</code> loop (skipping the rest of
+            the loop body). This requires a second label stack alongside the break stack.
+            <code>continue</code> inside a switch (with no enclosing loop) should be a
+            semantic error.
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ── Deliverables ── -->
+    <section id="deliverables">
+      <h2 class="sec-title">Deliverables</h2>
+      <div class="deliverable">
+        <h3>What to have ready at the end of class</h3>
+        <ul>
+          <li>
+            <strong>semantic.c</strong> — contains a <code>breakDepth</code> counter;
+            <code>NODE_BREAK</code> reports an error when <code>breakDepth == 0</code>;
+            <code>NODE_SWITCH</code> detects duplicate case values and a duplicate default,
+            warns on missing default, and validates each case body;
+            <code>NODE_FOR</code> and <code>NODE_WHILE</code> body checks are wrapped with
+            <code>breakDepth++</code> / <code>breakDepth--</code>
+          </li>
+          <li>
+            <strong>tac.c</strong> — contains a break label stack with
+            <code>pushBreakLabel</code>, <code>peekBreakLabel</code>, <code>popBreakLabel</code>;
+            <code>NODE_SWITCH</code> emits a correct dispatch table + case bodies;
+            <code>NODE_BREAK</code> emits <code>TAC_GOTO</code> to the break target;
+            <code>NODE_FOR</code> and <code>NODE_WHILE</code> push/pop their end labels
+          </li>
+          <li>
+            <strong><code>make test-switch</code> produces correct MIPS</strong> for all
+            tested scenarios: simple dispatch, default clause, break, fall-through, and
+            switch inside a function
+          </li>
+          <li>
+            <strong>Error tests pass:</strong> compiling a program with a duplicate case
+            value reports an error and stops; compiling a bare <code>break;</code> outside
+            any context reports an error and stops
+          </li>
+          <li>
+            <em>(If you attempted the challenge)</em> A brief written explanation
+            (comment in the code or a note) of which option you implemented and what
+            you observed
+          </li>
+        </ul>
+      </div>
+
+      <div class="callout tip" style="margin-top:1.25rem;">
+        <div class="icon">&#127881;</div>
+        <p>
+          <strong>Congratulations!</strong> With both activities complete, your minicompiler
+          now supports all major C control-flow constructs: <code>if/else</code>,
+          <code>while</code>, <code>for</code>, and <code>switch/case/break</code>. The
+          same architecture — tokens, grammar, AST, semantic checks, TAC, and MIPS codegen —
+          scales to any new language feature you want to add.
+        </p>
+      </div>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>

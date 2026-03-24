@@ -8,6 +8,10 @@
 TACList tacList;
 extern TACList optimizedList;
 
+#define BREAK_STACK_MAX 256
+static char* breakLabelStack[BREAK_STACK_MAX];
+static int breakLabelTop = -1;
+
 /* Initialize TAC lists */
 void initTAC() {
     tacList.head = tacList.tail = NULL;
@@ -67,6 +71,24 @@ int isConst(const char* s) {
     char* end;
     strtod(s, &end);
     return *end == '\0';
+}
+
+static void pushBreakLabel(char* label) {
+    if (!label) return;
+    if (breakLabelTop < BREAK_STACK_MAX - 1) {
+        breakLabelStack[++breakLabelTop] = label;
+    }
+}
+
+static void popBreakLabel(void) {
+    if (breakLabelTop >= 0) {
+        breakLabelTop--;
+    }
+}
+
+static char* currentBreakLabel(void) {
+    if (breakLabelTop < 0) return NULL;
+    return breakLabelStack[breakLabelTop];
 }
 
 /* Generate TAC for expressions and return result temporary or literal */
@@ -247,6 +269,8 @@ void generateTAC(ASTNode* node) {
         case NODE_WHILE: {
             char* start_label = newLabel();
             char* end_label = newLabel();
+
+            pushBreakLabel(end_label);
             
             // Label for loop start
             appendTAC(createTAC(TAC_LABEL, start_label, NULL, NULL));
@@ -265,6 +289,7 @@ void generateTAC(ASTNode* node) {
             
             // Label for loop end
             appendTAC(createTAC(TAC_LABEL, end_label, NULL, NULL));
+            popBreakLabel();
             break;
         }
 
@@ -272,6 +297,8 @@ void generateTAC(ASTNode* node) {
             /* Emit: init; start: if(!cond) goto end; body; update; goto start; end: */
             char* start_label = newLabel();
             char* end_label   = newLabel();
+
+            pushBreakLabel(end_label);
 
             /* 1. Initialization (may be NULL) */
             if (node->data.for_loop.init) {
@@ -300,6 +327,7 @@ void generateTAC(ASTNode* node) {
 
             /* 7. Exit label */
             appendTAC(createTAC(TAC_LABEL, end_label, NULL, NULL));
+            popBreakLabel();
             break;
         }
 
@@ -337,6 +365,110 @@ void generateTAC(ASTNode* node) {
                 appendTAC(createTAC(TAC_IF_FALSE, cond, NULL, end_lbl));
                 generateTAC(node->data.if_stmt.then_stmt);
                 appendTAC(createTAC(TAC_LABEL, end_lbl, NULL, NULL));
+            }
+            break;
+        }
+
+        case NODE_SWITCH: {
+            int case_count = 0;
+            int default_index = -1;
+
+            for (ASTNode* curr = node->data.switch_stmt.cases; curr; curr = curr->data.case_stmt.next) {
+                case_count++;
+            }
+
+            ASTNode** cases = NULL;
+            char** labels = NULL;
+            if (case_count > 0) {
+                cases = malloc(sizeof(ASTNode*) * case_count);
+                labels = malloc(sizeof(char*) * case_count);
+                if (!cases || !labels) {
+                    fprintf(stderr, "TAC Error: memory allocation failed in switch generation\n");
+                    free(cases);
+                    free(labels);
+                    break;
+                }
+            }
+
+            int idx = 0;
+            for (ASTNode* curr = node->data.switch_stmt.cases; curr; curr = curr->data.case_stmt.next) {
+                cases[idx] = curr;
+                labels[idx] = newLabel();
+                if (curr->data.case_stmt.is_default) {
+                    default_index = idx;
+                }
+                idx++;
+            }
+
+            char switch_var[32];
+            snprintf(switch_var, sizeof(switch_var), "__sw%d", tacList.labelCount);
+            appendTAC(createTAC(TAC_DECL, NULL, NULL, switch_var));
+
+            char* switch_value = generateTACExpr(node->data.switch_stmt.expr);
+            if (switch_value) {
+                appendTAC(createTAC(TAC_ASSIGN, switch_value, NULL, switch_var));
+            }
+
+            char* dispatch_done = newLabel();
+            char* end_label = newLabel();
+            pushBreakLabel(end_label);
+
+            for (int i = 0; i < case_count; i++) {
+                if (cases[i]->data.case_stmt.is_default) {
+                    continue;
+                }
+
+                char value_str[32];
+                snprintf(value_str, sizeof(value_str), "%d", cases[i]->data.case_stmt.value);
+
+                char* cmp_temp = newTemp();
+                char* fail_label = dispatch_done;
+                int has_next_non_default = 0;
+                for (int j = i + 1; j < case_count; j++) {
+                    if (!cases[j]->data.case_stmt.is_default) {
+                        has_next_non_default = 1;
+                        break;
+                    }
+                }
+                if (has_next_non_default) {
+                    fail_label = newLabel();
+                }
+
+                appendTAC(createTAC(TAC_EQ, switch_var, value_str, cmp_temp));
+                appendTAC(createTAC(TAC_IF_FALSE, cmp_temp, NULL, fail_label));
+                appendTAC(createTAC(TAC_GOTO, labels[i], NULL, NULL));
+                if (has_next_non_default) {
+                    appendTAC(createTAC(TAC_LABEL, fail_label, NULL, NULL));
+                }
+            }
+
+            appendTAC(createTAC(TAC_LABEL, dispatch_done, NULL, NULL));
+            if (default_index >= 0) {
+                appendTAC(createTAC(TAC_GOTO, labels[default_index], NULL, NULL));
+            } else {
+                appendTAC(createTAC(TAC_GOTO, end_label, NULL, NULL));
+            }
+
+            for (int i = 0; i < case_count; i++) {
+                appendTAC(createTAC(TAC_LABEL, labels[i], NULL, NULL));
+                if (cases[i]->data.case_stmt.body) {
+                    generateTAC(cases[i]->data.case_stmt.body);
+                }
+            }
+
+            appendTAC(createTAC(TAC_LABEL, end_label, NULL, NULL));
+            popBreakLabel();
+            free(cases);
+            free(labels);
+            break;
+        }
+
+        case NODE_BREAK: {
+            char* break_target = currentBreakLabel();
+            if (break_target) {
+                appendTAC(createTAC(TAC_GOTO, break_target, NULL, NULL));
+            } else {
+                fprintf(stderr, "TAC Error: break without enclosing context\n");
             }
             break;
         }

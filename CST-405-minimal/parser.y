@@ -72,6 +72,88 @@ void checkIfCondition(ASTNode* condition) {
         }
     }
 }
+
+static int break_context_depth = 0;
+
+static void enterBreakContext(void) {
+    break_context_depth++;
+}
+
+static void exitBreakContext(void) {
+    if (break_context_depth > 0) {
+        break_context_depth--;
+    }
+}
+
+static int isIntegralExpr(ASTNode* expr) {
+    if (!expr) return 0;
+
+    switch (expr->type) {
+        case NODE_NUM:
+            return 1;
+        case NODE_FLT:
+        case NODE_STR:
+            return 0;
+        case NODE_VAR:
+            return getVarType(expr->data.var.name) == TYPE_INT;
+        case NODE_ARRAY_ACCESS:
+            return getVarType(expr->data.array_access.name) == TYPE_INT;
+        case NODE_FUNC_CALL:
+            return getFunctionReturnType(expr->data.func_call.name) == TYPE_INT;
+        case NODE_BINOP:
+            if (expr->data.binop.op == OP_EQ || expr->data.binop.op == OP_NE ||
+                expr->data.binop.op == OP_LT || expr->data.binop.op == OP_GT ||
+                expr->data.binop.op == OP_LE || expr->data.binop.op == OP_GE) {
+                return 1;
+            }
+            return isIntegralExpr(expr->data.binop.left) &&
+                   isIntegralExpr(expr->data.binop.right);
+        default:
+            return 0;
+    }
+}
+
+static void validateSwitchCases(ASTNode* cases) {
+    int seen_values[256];
+    int seen_count = 0;
+    int default_count = 0;
+
+    for (ASTNode* curr = cases; curr; curr = curr->data.case_stmt.next) {
+        if (curr->type != NODE_CASE) continue;
+
+        if (curr->data.case_stmt.is_default) {
+            default_count++;
+            if (default_count > 1) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Multiple default clauses in one switch are not allowed\n");
+                fprintf(stderr, "💡 Suggestion: Keep only one default clause per switch\n\n");
+                semantic_error_count++;
+            }
+            continue;
+        }
+
+        for (int i = 0; i < seen_count; i++) {
+            if (seen_values[i] == curr->data.case_stmt.value) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Duplicate case value '%d' in switch\n", curr->data.case_stmt.value);
+                fprintf(stderr, "💡 Suggestion: Case labels in one switch must be unique\n\n");
+                semantic_error_count++;
+                break;
+            }
+        }
+
+        if (seen_count < 256) {
+            seen_values[seen_count++] = curr->data.case_stmt.value;
+        }
+    }
+
+    if (default_count == 0) {
+        fprintf(stderr, "\n⚠️  Warning at line %d:\n", yyline);
+        fprintf(stderr, "   switch has no default clause\n");
+        fprintf(stderr, "💡 Suggestion: Add default: to handle unmatched values\n\n");
+    }
+}
+
 int syntax_error_count = 0;    /* Counter for syntax errors */
 extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %}
@@ -98,10 +180,12 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %token RETURN
 %token WHILE FOR       /* Loop keywords */
 %token IF ELSE         /* Conditional keywords */
+%token SWITCH CASE DEFAULT BREAK
 %token EQ NE LT GT LE GE   /* Comparison operators */
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program func_list func param_list param stmt_list stmt decl assign expr print_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update if_stmt
+%type <node> program func_list func param_list param stmt_list stmt stmt_list_opt decl assign expr print_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update if_stmt switch_stmt break_stmt case_clause_list_opt case_clause_list case_clause
+%type <num> case_value
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
 /* Dangling-else: LOWER_THAN_ELSE < ELSE so shift always wins → else attaches to nearest if */
@@ -241,6 +325,11 @@ stmt_list:
     }
     ;
 
+stmt_list_opt:
+    /* empty */ { $$ = NULL; }
+    | stmt_list  { $$ = $1; }
+    ;
+
 /* STATEMENT RULES */
 stmt:
     decl        /* Variable declaration */
@@ -250,6 +339,8 @@ stmt:
     | while_stmt /* While loop statement */
     | for_stmt   /* For loop statement */
     | if_stmt    /* If / if-else statement */
+    | switch_stmt /* Switch statement */
+    | break_stmt /* Break statement */
     | func_call ';' {
         /* Bare function call as statement (e.g., fillNumbers(arr);) */
         $$ = $1;
@@ -553,9 +644,10 @@ arg_list:
 
 /* WHILE LOOP RULE */
 while_stmt:
-    WHILE '(' expr ')' '{' stmt_list '}' {
+    WHILE '(' expr ')' { enterBreakContext(); } '{' stmt_list '}' {
         checkWhileLoop($3);  /* Semantic check for infinite/dead loops */
-        $$ = createWhile($3, $6);
+        exitBreakContext();
+        $$ = createWhile($3, $7);
     }
     ;
 
@@ -564,9 +656,10 @@ while_stmt:
  *             1    2    3      4    5      6    7       8    9
  */
 for_stmt:
-    FOR '(' for_init ';' for_cond ';' for_update ')' stmt {
+    FOR '(' for_init ';' for_cond ';' for_update ')' { enterBreakContext(); } stmt {
         checkForLoop($5);  /* Semantic check for infinite/dead for loops */
-        $$ = createFor($3, $5, $7, $9);
+        exitBreakContext();
+        $$ = createFor($3, $5, $7, $10);
     }
     ;
 
@@ -585,6 +678,61 @@ if_stmt:
     | IF '(' expr ')' stmt ELSE stmt {
         checkIfCondition($3);          /* warn on constant condition */
         $$ = createIf($3, $5, $7);     /* if with else */
+    }
+    ;
+
+switch_stmt:
+    SWITCH '(' expr ')' { enterBreakContext(); } '{' case_clause_list_opt '}' {
+        if (!isIntegralExpr($3)) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   switch controlling expression must be integral (int)\n");
+            fprintf(stderr, "💡 Suggestions:\n");
+            fprintf(stderr, "   • Use an int expression in switch(...)\n");
+            fprintf(stderr, "   • Convert float expressions before switching\n\n");
+            semantic_error_count++;
+        }
+
+        validateSwitchCases($7);
+        exitBreakContext();
+        $$ = createSwitch($3, $7);
+    }
+    ;
+
+case_clause_list_opt:
+    /* empty */ { $$ = NULL; }
+    | case_clause_list { $$ = $1; }
+    ;
+
+case_clause_list:
+    case_clause { $$ = $1; }
+    | case_clause_list case_clause {
+        $$ = appendCase($1, $2);
+    }
+    ;
+
+case_clause:
+    CASE case_value ':' stmt_list_opt {
+        $$ = createCase((int)$2, 0, $4);
+    }
+    | DEFAULT ':' stmt_list_opt {
+        $$ = createCase(0, 1, $3);
+    }
+    ;
+
+case_value:
+    NUM      { $$ = $1; }
+    | '-' NUM { $$ = -$2; }
+    ;
+
+break_stmt:
+    BREAK ';' {
+        if (break_context_depth == 0) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   'break' is only valid inside a loop or switch\n");
+            fprintf(stderr, "💡 Suggestion: Place break inside while/for/switch blocks\n\n");
+            semantic_error_count++;
+        }
+        $$ = createBreak();
     }
     ;
 

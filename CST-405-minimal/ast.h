@@ -41,7 +41,10 @@ typedef enum {
     NODE_FUNC_LIST,  /* List of functions (program structure) */
     NODE_WHILE,     /* While loop (e.g., while (cond) { ... }) */
     NODE_FOR,       /* For loop  (e.g., for (i=0; i<n; i=i+1) { ... }) */
-    NODE_IF         /* If statement (e.g., if (cond) { ... } else { ... }) */
+    NODE_IF,        /* If statement (e.g., if (cond) { ... } else { ... }) */
+    NODE_SWITCH,    /* Switch statement */
+    NODE_CASE,      /* Case/default clause */
+    NODE_BREAK      /* Break statement */
 } NodeType;
 
 /* Comparison operators for NODE_BINOP */
@@ -183,6 +186,20 @@ typedef struct ASTNode {
             struct ASTNode* then_stmt;  /* executed when condition is true */
             struct ASTNode* else_stmt;  /* executed when false (NULL = no else) */
         } if_stmt;
+
+        /* Switch statement (NODE_SWITCH) */
+        struct {
+            struct ASTNode* expr;       /* controlling expression */
+            struct ASTNode* cases;      /* head of linked case list */
+        } switch_stmt;
+
+        /* Case/default clause (NODE_CASE) */
+        struct {
+            int value;                  /* case constant (ignored for default) */
+            int is_default;             /* 1 = default clause */
+            struct ASTNode* body;       /* clause body (can be NULL for fall-through) */
+            struct ASTNode* next;       /* next case/default clause */
+        } case_stmt;
     } data;
 } ASTNode;
 
@@ -212,6 +229,10 @@ ASTNode* createFuncList(ASTNode* func1, ASTNode* func2);         /* Create funct
 ASTNode* createWhile(ASTNode* condition, ASTNode* body);         /* Create while loop node */
 ASTNode* createFor(ASTNode* init, ASTNode* condition, ASTNode* update, ASTNode* body); /* Create for loop node */
 ASTNode* createIf(ASTNode* condition, ASTNode* then_stmt, ASTNode* else_stmt);          /* Create if-stmt node */
+ASTNode* createSwitch(ASTNode* expr, ASTNode* cases);                                    /* Create switch node */
+ASTNode* createCase(int value, int is_default, ASTNode* body);                           /* Create case/default node */
+ASTNode* appendCase(ASTNode* list, ASTNode* clause);                                     /* Append case node to list tail */
+ASTNode* createBreak(void);                                                               /* Create break node */
 
 /* AST DISPLAY FUNCTION */
 void printAST(ASTNode* node, int level);                        /* Pretty-print the AST */

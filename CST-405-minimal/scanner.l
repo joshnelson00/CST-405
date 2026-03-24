@@ -31,6 +31,10 @@ int yycolumn = 1;
 "for"           { yycolumn += yyleng; return FOR; }
 "if"            { yycolumn += yyleng; return IF; }
 "else"          { yycolumn += yyleng; return ELSE; }
+"switch"        { yycolumn += yyleng; return SWITCH; }
+"case"          { yycolumn += yyleng; return CASE; }
+"default"       { yycolumn += yyleng; return DEFAULT; }
+"break"         { yycolumn += yyleng; return BREAK; }
 
 \"[^\"]*\" {
     /* String literal with escape sequences */
@@ -66,6 +70,7 @@ int yycolumn = 1;
 "/"             { yycolumn++; return '/'; }
 "="             { yycolumn++; return '='; }
 ";"             { yycolumn++; return ';'; }
+":"             { yycolumn++; return ':'; }
 ","             { yycolumn++; return ','; }
 "("             { yycolumn++; return '('; }
 ")"             { yycolumn++; return ')'; }

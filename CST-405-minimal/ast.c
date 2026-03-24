@@ -376,6 +376,34 @@ void printAST(ASTNode* node, int level) {
                 printAST(node->data.if_stmt.else_stmt, level + 2);
             }
             break;
+        case NODE_SWITCH:
+            printf("SWITCH\n");
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("EXPR:\n");
+            printAST(node->data.switch_stmt.expr, level + 2);
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("CASES:\n");
+            printAST(node->data.switch_stmt.cases, level + 2);
+            break;
+        case NODE_CASE:
+            if (node->data.case_stmt.is_default) {
+                printf("DEFAULT:\n");
+            } else {
+                printf("CASE %d:\n", node->data.case_stmt.value);
+            }
+            if (node->data.case_stmt.body) {
+                printAST(node->data.case_stmt.body, level + 1);
+            } else {
+                for (int i = 0; i < level + 1; i++) printf("  ");
+                printf("(empty)\n");
+            }
+            if (node->data.case_stmt.next) {
+                printAST(node->data.case_stmt.next, level);
+            }
+            break;
+        case NODE_BREAK:
+            printf("BREAK\n");
+            break;
         default:
             printf("UNKNOWN NODE TYPE: %d\n", node->type);
             break;
@@ -504,5 +532,45 @@ ASTNode* createIf(ASTNode* condition, ASTNode* then_stmt, ASTNode* else_stmt) {
     node->data.if_stmt.condition = condition;
     node->data.if_stmt.then_stmt = then_stmt;
     node->data.if_stmt.else_stmt = else_stmt;  /* NULL = no else */
+    return node;
+}
+
+/* Create a switch node */
+ASTNode* createSwitch(ASTNode* expr, ASTNode* cases) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_SWITCH;
+    node->data.switch_stmt.expr = expr;
+    node->data.switch_stmt.cases = cases;
+    return node;
+}
+
+/* Create a case/default node */
+ASTNode* createCase(int value, int is_default, ASTNode* body) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_CASE;
+    node->data.case_stmt.value = value;
+    node->data.case_stmt.is_default = is_default;
+    node->data.case_stmt.body = body;
+    node->data.case_stmt.next = NULL;
+    return node;
+}
+
+/* Append case clause to preserve source order */
+ASTNode* appendCase(ASTNode* list, ASTNode* clause) {
+    if (!clause) return list;
+    if (!list) return clause;
+
+    ASTNode* curr = list;
+    while (curr->data.case_stmt.next) {
+        curr = curr->data.case_stmt.next;
+    }
+    curr->data.case_stmt.next = clause;
+    return list;
+}
+
+/* Create a break node */
+ASTNode* createBreak(void) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_BREAK;
     return node;
 }
