@@ -89,6 +89,7 @@ ASTNode* createVar(char* name) {
     node->type = NODE_VAR;
     node->data.var.name = strdup(name);  /* Copy the variable name */
     node->data.var.type = getVarType(name);       /* Default type for variables */
+    node->data.var.struct_name = NULL;
     return node;
 }
 /* Create a binary operation node (for addition) */
@@ -107,6 +108,17 @@ ASTNode* createDecl(char* name, VarType type) {
     node->type = NODE_DECL;
     node->data.var.name = strdup(name);  /* Store variable name */
     node->data.var.type = type;          /* Store variable type */
+    node->data.var.struct_name = NULL;
+    return node;
+}
+
+/* Create a struct declaration node */
+ASTNode* createStructDecl(char* name, const char* struct_name) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_DECL;
+    node->data.var.name = strdup(name);
+    node->data.var.type = TYPE_STRUCT;
+    node->data.var.struct_name = strdup(struct_name);
     return node;
 }
 
@@ -242,8 +254,12 @@ void printAST(ASTNode* node, int level) {
             printAST(node->data.binop.right, level + 1);
             break;
         case NODE_DECL:
-            printf("DECL %s (%s)\n", node->data.var.name,
-                   node->data.var.type == TYPE_FLOAT ? "float" : "int");
+            if (node->data.var.type == TYPE_STRUCT && node->data.var.struct_name) {
+                printf("DECL %s (struct %s)\n", node->data.var.name, node->data.var.struct_name);
+            } else {
+                printf("DECL %s (%s)\n", node->data.var.name,
+                       node->data.var.type == TYPE_FLOAT ? "float" : "int");
+            }
             break;
         case NODE_ARRAY_DECL:
             printf("ARRAY_DECL %s[%d] (%s)\n", node->data.array_decl.name,
@@ -403,6 +419,27 @@ void printAST(ASTNode* node, int level) {
             break;
         case NODE_BREAK:
             printf("BREAK\n");
+            break;
+        case NODE_STRUCT_DEF:
+            printf("STRUCT_DEF %s\n", node->data.var.name);
+            if (node->data.expr) {
+                printAST(node->data.expr, level + 1);
+            }
+            break;
+        case NODE_FIELD_DECL:
+            printf("FIELD %s\n", node->data.field_decl.name);
+            if (node->data.field_decl.next) {
+                printAST(node->data.field_decl.next, level);
+            }
+            break;
+        case NODE_MEMBER_ACCESS:
+            printf("MEMBER_ACCESS .%s\n", node->data.member_access.field);
+            printAST(node->data.member_access.base, level + 1);
+            break;
+        case NODE_MEMBER_ASSIGN:
+            printf("MEMBER_ASSIGN .%s =\n", node->data.member_assign.field);
+            printAST(node->data.member_assign.base, level + 1);
+            printAST(node->data.member_assign.value, level + 1);
             break;
         default:
             printf("UNKNOWN NODE TYPE: %d\n", node->type);
@@ -572,5 +609,57 @@ ASTNode* appendCase(ASTNode* list, ASTNode* clause) {
 ASTNode* createBreak(void) {
     ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_BREAK;
+    return node;
+}
+
+/* Create a struct definition node */
+ASTNode* createStructDef(char* name, ASTNode* fields) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_STRUCT_DEF;
+    node->data.var.name = strdup(name);
+    node->data.var.type = TYPE_STRUCT;
+    node->data.var.struct_name = strdup(name);
+    node->data.expr = fields;
+    return node;
+}
+
+/* Create a field declaration node */
+ASTNode* createFieldDecl(char* name) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_FIELD_DECL;
+    node->data.field_decl.name = strdup(name);
+    node->data.field_decl.next = NULL;
+    return node;
+}
+
+/* Append field declaration to list tail */
+ASTNode* appendField(ASTNode* list, ASTNode* field) {
+    if (!field) return list;
+    if (!list) return field;
+
+    ASTNode* curr = list;
+    while (curr->data.field_decl.next) {
+        curr = curr->data.field_decl.next;
+    }
+    curr->data.field_decl.next = field;
+    return list;
+}
+
+/* Create struct member access node */
+ASTNode* createMemberAccess(ASTNode* base, char* field) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_MEMBER_ACCESS;
+    node->data.member_access.base = base;
+    node->data.member_access.field = strdup(field);
+    return node;
+}
+
+/* Create struct member assignment node */
+ASTNode* createMemberAssign(ASTNode* base, char* field, ASTNode* value) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_MEMBER_ASSIGN;
+    node->data.member_assign.base = base;
+    node->data.member_assign.field = strdup(field);
+    node->data.member_assign.value = value;
     return node;
 }

@@ -14,18 +14,35 @@ extern int semantic_error_count;
 
 #define MAX_VARS 100  /* Maximum number of variables supported */
 #define MAX_FUNCS 50  /* Maximum number of functions supported */
+#define MAX_STRUCTS 32
+#define MAX_STRUCT_FIELDS 32
 #define HASH_SIZE 211 /* Prime number for better hash distribution */
+
+typedef struct FieldInfo {
+    char* name;
+    int offset;
+} FieldInfo;
+
+typedef struct StructType {
+    char* name;
+    FieldInfo fields[MAX_STRUCT_FIELDS];
+    int numFields;
+    int totalSize;
+} StructType;
+
 /* VARIABLE TYPES */
 typedef enum {
     TYPE_INT,
     TYPE_FLOAT,
-    TYPE_VOID
+    TYPE_VOID,
+    TYPE_STRUCT
 } VarType;
 /* SYMBOL ENTRY - Information about each variable */
 typedef struct Symbol {
     char* name;     /* Variable identifier */
     int offset;     /* Stack offset in bytes (for MIPS stack frame) */
     VarType type;   /* Variable type (int or float) */
+    StructType* structType; /* Struct metadata when type == TYPE_STRUCT */
     int isArray;   /* Flag indicating if variable is an array */
     int arraySize; /* Size of the array if isArray is true */
     struct Symbol* next; /* Next symbol in hash chain (for collision resolution) */
@@ -76,4 +93,14 @@ int isArrayVar(char* name); /* Check if variable is an array */
 int getArraySize(char* name); /* Get size of array variable */
 int validateFunctionCall(char* func_name, int arg_count); /* Validate function call argument count */
 void addParamsToScope(ASTNode* params); /* Add function parameters to current scope */
+
+/* Struct type operations */
+int registerStruct(StructType* st);
+StructType* lookupStruct(const char* name);
+int getStructFieldOffset(const StructType* st, const char* field_name);
+int addStructVar(char* name, const char* struct_name);
+StructType* getVarStructType(char* name);
+
+/* Tracks whether the parsed source used struct features (Session 1 support). */
+extern int struct_feature_used;
 #endif

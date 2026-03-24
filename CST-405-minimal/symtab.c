@@ -7,9 +7,12 @@
 /* Global symbol table instance */
 GlobalSymbolTable globalSymTab;
 SymbolTable* currentSymTab = NULL;  // current active scope
+static StructType structTypes[MAX_STRUCTS];
+static int structTypeCount = 0;
 
 /* Global error counter for semantic errors */
 int semantic_error_count = 0;
+int struct_feature_used = 0;
 
 extern int yyline;
 
@@ -30,7 +33,55 @@ void initGlobalSymTab() {
     globalSymTab.func_count = 0;
     globalSymTab.current_local = NULL;
     globalSymTab.current_func_index = -1;
+    structTypeCount = 0;
     printf("GLOBAL SYMBOL TABLE: Initialized\n");
+}
+
+StructType* lookupStruct(const char* name) {
+    if (!name) return NULL;
+    for (int i = 0; i < structTypeCount; i++) {
+        if (strcmp(structTypes[i].name, name) == 0) {
+            return &structTypes[i];
+        }
+    }
+    return NULL;
+}
+
+int getStructFieldOffset(const StructType* st, const char* field_name) {
+    if (!st || !field_name) return -1;
+    for (int i = 0; i < st->numFields; i++) {
+        if (strcmp(st->fields[i].name, field_name) == 0) {
+            return st->fields[i].offset;
+        }
+    }
+    return -1;
+}
+
+int registerStruct(StructType* st) {
+    if (!st || !st->name) return -1;
+    if (lookupStruct(st->name)) {
+        return -1;
+    }
+    if (structTypeCount >= MAX_STRUCTS) {
+        fprintf(stderr, "❌ Error: Struct table full (max %d structs)\n", MAX_STRUCTS);
+        semantic_error_count++;
+        return -1;
+    }
+
+    StructType* dst = &structTypes[structTypeCount++];
+    dst->name = strdup(st->name);
+    dst->numFields = st->numFields;
+    dst->totalSize = st->numFields * 4;
+
+    for (int i = 0; i < st->numFields; i++) {
+        dst->fields[i].name = strdup(st->fields[i].name);
+        dst->fields[i].offset = i * 4;
+    }
+
+    struct_feature_used = 1;
+    printf("STRUCT TABLE: Registered struct '%s' (%d fields, %d bytes)\n",
+           dst->name, dst->numFields, dst->totalSize);
+    return 0;
 }
 
 /* Initialize a new local symbol table */
@@ -74,6 +125,7 @@ int addVar(char* name, VarType type) {
     Symbol* entry = &currentSymTab->vars[currentSymTab->count];
     entry->name = strdup(name);
     entry->type = type;
+    entry->structType = NULL;
     entry->isArray = 0;
     entry->arraySize = 0;
     entry->offset = currentSymTab->nextOffset;
@@ -130,6 +182,7 @@ int addArray(char* name, VarType type, int size) {
     Symbol* entry = &currentSymTab->vars[currentSymTab->count];
     entry->name = strdup(name);
     entry->type = type;
+    entry->structType = NULL;
     entry->isArray = 1;
     entry->arraySize = size;
     entry->offset = currentSymTab->nextOffset;
@@ -438,11 +491,18 @@ void printSymTab() {
     }
     printf("Count: %d, NextOffset: %d\n", currentSymTab->count, currentSymTab->nextOffset);
     for (int i = 0; i < currentSymTab->count; i++) {
-        printf("  %s (%s) -> offset %d\n",
-               currentSymTab->vars[i].name,
-               currentSymTab->vars[i].type == TYPE_FLOAT ? "float" :
-               currentSymTab->vars[i].type == TYPE_VOID ? "void" : "int",
-               currentSymTab->vars[i].offset);
+        if (currentSymTab->vars[i].type == TYPE_STRUCT && currentSymTab->vars[i].structType) {
+            printf("  %s (struct %s) -> offset %d\n",
+                   currentSymTab->vars[i].name,
+                   currentSymTab->vars[i].structType->name,
+                   currentSymTab->vars[i].offset);
+        } else {
+            printf("  %s (%s) -> offset %d\n",
+                   currentSymTab->vars[i].name,
+                   currentSymTab->vars[i].type == TYPE_FLOAT ? "float" :
+                   currentSymTab->vars[i].type == TYPE_VOID ? "void" : "int",
+                   currentSymTab->vars[i].offset);
+        }
     }
     printf("==================\n");
 }
@@ -510,6 +570,7 @@ int addArrayVar(char* name, VarType type, int size) {
     Symbol* entry = &currentSymTab->vars[currentSymTab->count];
     entry->name = strdup(name);
     entry->type = type;
+    entry->structType = NULL;
     entry->isArray = 1;
     entry->arraySize = size;
     entry->offset = currentSymTab->nextOffset;
@@ -529,6 +590,70 @@ int addArrayVar(char* name, VarType type, int size) {
            entry->offset, h);
 
     return entry->offset;
+}
+
+int addStructVar(char* name, const char* struct_name) {
+    if (!currentSymTab) {
+        fprintf(stderr, "❌ Error: No active symbol table\n");
+        return -1;
+    }
+
+    StructType* st = lookupStruct(struct_name);
+    if (!st) {
+        fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Unknown struct type '%s'\n", struct_name);
+        fprintf(stderr, "💡 Suggestion: define it first with: struct %s { ... };\n\n", struct_name);
+        semantic_error_count++;
+        return -1;
+    }
+
+    if (isVarDeclared(name)) {
+        fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Variable '%s' is already declared in this scope\n", name);
+        fprintf(stderr, "💡 Suggestion: use a different variable name\n\n");
+        semantic_error_count++;
+        return -1;
+    }
+
+    if (currentSymTab->count >= MAX_VARS) {
+        fprintf(stderr, "❌ Error: Symbol table full (max %d variables)\n", MAX_VARS);
+        semantic_error_count++;
+        return -1;
+    }
+
+    Symbol* entry = &currentSymTab->vars[currentSymTab->count];
+    entry->name = strdup(name);
+    entry->type = TYPE_STRUCT;
+    entry->structType = st;
+    entry->isArray = 0;
+    entry->arraySize = 0;
+    entry->offset = currentSymTab->nextOffset;
+    entry->next = NULL;
+    currentSymTab->nextOffset += st->totalSize;
+    currentSymTab->count++;
+
+    unsigned int h = hash(name);
+    entry->next = currentSymTab->hash_table[h];
+    currentSymTab->hash_table[h] = entry;
+
+    struct_feature_used = 1;
+    printf("SYMBOL TABLE: Added struct var '%s' (struct %s) at offset %d [size=%d]\n",
+           name, struct_name, entry->offset, st->totalSize);
+    return entry->offset;
+}
+
+StructType* getVarStructType(char* name) {
+    if (!currentSymTab || !name) return NULL;
+
+    unsigned int h = hash(name);
+    Symbol* node = currentSymTab->hash_table[h];
+    while (node) {
+        if (strcmp(node->name, name) == 0) {
+            return node->structType;
+        }
+        node = node->next;
+    }
+    return NULL;
 }
 
 int isArrayVar(char* name) {
