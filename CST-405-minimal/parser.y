@@ -100,6 +100,8 @@ static int isIntegralExpr(ASTNode* expr) {
             return getVarType(expr->data.array_access.name) == TYPE_INT;
         case NODE_FUNC_CALL:
             return getFunctionReturnType(expr->data.func_call.name) == TYPE_INT;
+        case NODE_MEMBER_ACCESS:
+            return 1;
         case NODE_BINOP:
             if (expr->data.binop.op == OP_EQ || expr->data.binop.op == OP_NE ||
                 expr->data.binop.op == OP_LT || expr->data.binop.op == OP_GT ||
@@ -111,6 +113,48 @@ static int isIntegralExpr(ASTNode* expr) {
         default:
             return 0;
     }
+}
+
+static VarType inferExprType(ASTNode* expr) {
+    if (!expr) return TYPE_VOID;
+
+    switch (expr->type) {
+        case NODE_NUM:
+            return TYPE_INT;
+        case NODE_FLT:
+            return TYPE_FLOAT;
+        case NODE_VAR:
+            return getVarType(expr->data.var.name);
+        case NODE_ARRAY_ACCESS:
+            return getVarType(expr->data.array_access.name);
+        case NODE_MEMBER_ACCESS:
+            return TYPE_INT; /* Session 1 fields are int-only. */
+        case NODE_FUNC_CALL:
+            return getFunctionReturnType(expr->data.func_call.name);
+        case NODE_BINOP: {
+            VarType lt = inferExprType(expr->data.binop.left);
+            VarType rt = inferExprType(expr->data.binop.right);
+            if (expr->data.binop.op == OP_EQ || expr->data.binop.op == OP_NE ||
+                expr->data.binop.op == OP_LT || expr->data.binop.op == OP_GT ||
+                expr->data.binop.op == OP_LE || expr->data.binop.op == OP_GE) {
+                return TYPE_INT;
+            }
+            if (lt == TYPE_STRUCT || rt == TYPE_STRUCT) {
+                return TYPE_STRUCT;
+            }
+            return (lt == TYPE_FLOAT || rt == TYPE_FLOAT) ? TYPE_FLOAT : TYPE_INT;
+        }
+        default:
+            return TYPE_INT;
+    }
+}
+
+static StructType* getMemberBaseStruct(ASTNode* base) {
+    if (!base) return NULL;
+    if (base->type == NODE_VAR) {
+        return getVarStructType(base->data.var.name);
+    }
+    return NULL;
 }
 
 static void validateSwitchCases(ASTNode* cases) {
@@ -181,10 +225,11 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %token WHILE FOR       /* Loop keywords */
 %token IF ELSE         /* Conditional keywords */
 %token SWITCH CASE DEFAULT BREAK
+%token STRUCT DOT AMP
 %token EQ NE LT GT LE GE   /* Comparison operators */
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program func_list func param_list param stmt_list stmt stmt_list_opt decl assign expr print_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update if_stmt switch_stmt break_stmt case_clause_list_opt case_clause_list case_clause
+%type <node> program struct_defs_opt struct_def field_list field_decl func_list func param_list param stmt_list stmt stmt_list_opt decl assign expr print_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update if_stmt switch_stmt break_stmt case_clause_list_opt case_clause_list case_clause
 %type <num> case_value
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
@@ -194,6 +239,7 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %left EQ NE LT GT LE GE
 %left '+' '-'
 %left '*' '/'
+%left DOT
 
 %%
 
@@ -201,11 +247,77 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 
 /* PROGRAM RULE - Entry point of our grammar */
 program:
-    func_list { 
+    struct_defs_opt func_list {
         /* Action: Save the function list as our AST root */
-        root = $1;  /* $1 refers to the first symbol (func_list) */
+        root = $2;
     }
-    | func_list error          { root = $1; yyerrok; }
+    | struct_defs_opt func_list error { root = $2; yyerrok; }
+    ;
+
+struct_defs_opt:
+    /* empty */ { $$ = NULL; }
+    | struct_defs_opt struct_def { $$ = $1; }
+    ;
+
+struct_def:
+    STRUCT ID '{' field_list '}' ';' {
+        StructType st;
+        memset(&st, 0, sizeof(st));
+        st.name = $2;
+
+        int fieldIndex = 0;
+        for (ASTNode* f = $4; f; f = f->data.field_decl.next) {
+            if (fieldIndex >= MAX_STRUCT_FIELDS) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Struct '%s' exceeds max field count (%d)\n\n", $2, MAX_STRUCT_FIELDS);
+                semantic_error_count++;
+                break;
+            }
+
+            int duplicate = 0;
+            for (int i = 0; i < fieldIndex; i++) {
+                if (strcmp(st.fields[i].name, f->data.field_decl.name) == 0) {
+                    duplicate = 1;
+                    break;
+                }
+            }
+            if (duplicate) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Duplicate field '%s' in struct '%s'\n", f->data.field_decl.name, $2);
+                fprintf(stderr, "💡 Suggestion: use unique field names in each struct definition\n\n");
+                semantic_error_count++;
+                continue;
+            }
+
+            st.fields[fieldIndex].name = f->data.field_decl.name;
+            st.fields[fieldIndex].offset = fieldIndex * 4;
+            fieldIndex++;
+        }
+        st.numFields = fieldIndex;
+        st.totalSize = fieldIndex * 4;
+
+        if (registerStruct(&st) != 0) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct '%s' is already defined\n", $2);
+            fprintf(stderr, "💡 Suggestion: rename or remove the duplicate struct definition\n\n");
+            semantic_error_count++;
+        }
+
+        $$ = createStructDef($2, $4);
+        free($2);
+    }
+    ;
+
+field_list:
+    field_decl { $$ = $1; }
+    | field_list field_decl { $$ = appendField($1, $2); }
+    ;
+
+field_decl:
+    INT ID ';' {
+        $$ = createFieldDecl($2);
+        free($2);
+    }
     ;
 
 /* FUNCTION LIST RULES */
@@ -367,6 +479,22 @@ decl:
         free($2);                       
         printSymTab();          
     }
+    | STRUCT ID ID ';' {
+        StructType* st = lookupStruct($2);
+        if (!st) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Unknown struct type '%s'\n", $2);
+            fprintf(stderr, "💡 Suggestion: define it first with: struct %s { ... };\n\n", $2);
+            semantic_error_count++;
+        } else {
+            addStructVar($3, $2);
+        }
+
+        $$ = createStructDecl($3, $2);
+        free($2);
+        free($3);
+        printSymTab();
+    }
     | INT ID '[' NUM ']' ';' {
         /* Array declaration with size validation */
         int size = (int)$4;
@@ -453,6 +581,23 @@ assign:
             fprintf(stderr, "   • Access a specific element: %s[0]\n\n", $3->data.var.name);
             semantic_error_count++;
         }
+
+        if (isVarDeclared($1)) {
+            VarType lhs = getVarType($1);
+            VarType rhs = inferExprType($3);
+            if (lhs == TYPE_STRUCT || rhs == TYPE_STRUCT) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Cannot assign struct values directly\n");
+                fprintf(stderr, "💡 Suggestion: assign individual fields (e.g., p.x = value)\n\n");
+                semantic_error_count++;
+            } else if (lhs != rhs && rhs != TYPE_VOID) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Type mismatch in assignment to '%s'\n", $1);
+                fprintf(stderr, "💡 Suggestion: assign a value with matching scalar type\n\n");
+                semantic_error_count++;
+            }
+        }
+
         $$ = createAssign($1, $3);  
         free($1);                   
     } 
@@ -493,8 +638,52 @@ assign:
                 }
             }
         }
+
+        if (isVarDeclared($1) && !isArrayVar($1)) {
+            VarType lhs = getVarType($1);
+            VarType rhs = inferExprType($6);
+            if (lhs != rhs && rhs != TYPE_VOID) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Type mismatch in array assignment for '%s[index]'\n", $1);
+                fprintf(stderr, "💡 Suggestion: assign a value with matching element type\n\n");
+                semantic_error_count++;
+            }
+        }
+
         $$ = createArrayAssign($1, $3, $6); /* $1 = ID, $3 = index expr, $6 = value expr */
         free($1);                           /* Free the identifier string */
+    }
+    | ID DOT ID '=' expr ';' {
+        ASTNode* base = createVar($1);
+        StructType* st = getVarStructType($1);
+
+        if (!isVarDeclared($1)) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Variable '%s' is not declared\n", $1);
+            fprintf(stderr, "💡 Suggestion: declare it before member assignment\n\n");
+            semantic_error_count++;
+        } else if (!st) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Variable '%s' is not a struct\n", $1);
+            fprintf(stderr, "💡 Suggestion: only struct variables support dot access\n\n");
+            semantic_error_count++;
+        } else if (getStructFieldOffset(st, $3) < 0) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct '%s' has no field named '%s'\n", st->name, $3);
+            fprintf(stderr, "💡 Suggestion: use one of the defined fields in struct '%s'\n\n", st->name);
+            semantic_error_count++;
+        }
+
+        if (inferExprType($5) == TYPE_STRUCT) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Cannot assign a struct value to field '%s.%s'\n", $1, $3);
+            fprintf(stderr, "💡 Suggestion: fields in Session 1 structs are int values\n\n");
+            semantic_error_count++;
+        }
+
+        $$ = createMemberAssign(base, $3, $5);
+        free($1);
+        free($3);
     }
     ;
 
@@ -525,19 +714,57 @@ expr:
         $$ = createVar($1);  
         free($1);            
     }
+    | AMP ID {
+        if (!isVarDeclared($2)) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Variable '%s' is not declared\n", $2);
+            fprintf(stderr, "💡 Suggestion: declare it before taking its address\n\n");
+            semantic_error_count++;
+        }
+        fprintf(stderr, "\n⚠️  Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Address-of '&%s' is parsed but not enabled until Session 2\n", $2);
+        fprintf(stderr, "💡 Suggestion: defer pointer-based struct calls until Session 2 implementation\n\n");
+        semantic_error_count++;
+        $$ = createVar($2);
+        free($2);
+    }
     | func_call { 
         $$ = $1;  
     }
     | expr '+' expr { 
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct values cannot be used with '+'\n");
+            fprintf(stderr, "💡 Suggestion: use struct fields (e.g., p.x + p.y)\n\n");
+            semantic_error_count++;
+        }
         $$ = createBinOp('+', $1, $3);  
     }
     | expr '-' expr { 
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct values cannot be used with '-'\n");
+            fprintf(stderr, "💡 Suggestion: use struct fields (e.g., p.x - p.y)\n\n");
+            semantic_error_count++;
+        }
         $$ = createBinOp('-', $1, $3);  
     }
     | expr '*' expr { 
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct values cannot be used with '*'\n");
+            fprintf(stderr, "💡 Suggestion: multiply scalar fields instead\n\n");
+            semantic_error_count++;
+        }
         $$ = createBinOp('*', $1, $3);  
     }
     | expr '/' expr { 
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct values cannot be used with '/'\n");
+            fprintf(stderr, "💡 Suggestion: divide scalar fields instead\n\n");
+            semantic_error_count++;
+        }
         $$ = createBinOp('/', $1, $3);  
     }
     | expr EQ expr {
@@ -600,6 +827,23 @@ expr:
         }
         $$ = createArrayAccess($1, $3);  /* $1 = ID, $3 = index expression */
         free($1);                        /* Free the identifier string */
+    }
+    | expr DOT ID {
+        StructType* st = getMemberBaseStruct($1);
+        if (!st) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Dot access requires a struct variable on the left side\n");
+            fprintf(stderr, "💡 Suggestion: use '<structVar>.field'\n\n");
+            semantic_error_count++;
+        } else if (getStructFieldOffset(st, $3) < 0) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct '%s' has no field named '%s'\n", st->name, $3);
+            fprintf(stderr, "💡 Suggestion: use a valid field defined in the struct\n\n");
+            semantic_error_count++;
+        }
+
+        $$ = createMemberAccess($1, $3);
+        free($3);
     }
     ;
 

@@ -35,6 +35,7 @@ int yycolumn = 1;
 "case"          { yycolumn += yyleng; return CASE; }
 "default"       { yycolumn += yyleng; return DEFAULT; }
 "break"         { yycolumn += yyleng; return BREAK; }
+"struct"        { yycolumn += yyleng; return STRUCT; }
 
 \"[^\"]*\" {
     /* String literal with escape sequences */
@@ -69,6 +70,8 @@ int yycolumn = 1;
 "*"             { yycolumn++; return '*'; }
 "/"             { yycolumn++; return '/'; }
 "="             { yycolumn++; return '='; }
+"."             { yycolumn++; return DOT; }
+"&"             { yycolumn++; return AMP; }
 ";"             { yycolumn++; return ';'; }
 ":"             { yycolumn++; return ':'; }
 ","             { yycolumn++; return ','; }

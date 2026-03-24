@@ -177,6 +177,15 @@ char* generateTACExpr(ASTNode* node) {
             appendTAC(createTAC(TAC_ARRAY_READ, array_name, index, temp));
             return temp;
         }
+        case NODE_MEMBER_ACCESS: {
+            /* Session 1 supports parsing/type checks only; TAC lowering is Session 2. */
+            static int warned_member_access = 0;
+            if (!warned_member_access) {
+                fprintf(stderr, "TAC Notice: struct member reads are not lowered until Session 2; using 0 placeholder.\n");
+                warned_member_access = 1;
+            }
+            return strdup("0");
+        }
         default:
             return NULL;
     }
@@ -469,6 +478,16 @@ void generateTAC(ASTNode* node) {
                 appendTAC(createTAC(TAC_GOTO, break_target, NULL, NULL));
             } else {
                 fprintf(stderr, "TAC Error: break without enclosing context\n");
+            }
+            break;
+        }
+
+        case NODE_MEMBER_ASSIGN: {
+            /* Session 1 supports semantic checks only; field writes are lowered in Session 2. */
+            static int warned_member_assign = 0;
+            if (!warned_member_assign) {
+                fprintf(stderr, "TAC Notice: struct member writes are not lowered until Session 2; skipping statement.\n");
+                warned_member_assign = 1;
             }
             break;
         }

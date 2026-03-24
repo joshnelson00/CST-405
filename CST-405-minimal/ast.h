@@ -44,7 +44,11 @@ typedef enum {
     NODE_IF,        /* If statement (e.g., if (cond) { ... } else { ... }) */
     NODE_SWITCH,    /* Switch statement */
     NODE_CASE,      /* Case/default clause */
-    NODE_BREAK      /* Break statement */
+    NODE_BREAK,     /* Break statement */
+    NODE_STRUCT_DEF,    /* Struct type definition */
+    NODE_FIELD_DECL,    /* Struct field declaration */
+    NODE_MEMBER_ACCESS, /* Struct member read (e.g., p.x) */
+    NODE_MEMBER_ASSIGN  /* Struct member write (e.g., p.x = 3) */
 } NodeType;
 
 /* Comparison operators for NODE_BINOP */
@@ -76,7 +80,14 @@ typedef struct ASTNode {
         struct {
             char* name;              /* Variable name */
             VarType type;            /* Variable type (for declarations) */
+            char* struct_name;       /* Struct type name when type == TYPE_STRUCT */
         } var;
+
+        /* Struct field declaration (NODE_FIELD_DECL) */
+        struct {
+            char* name;              /* Field name */
+            struct ASTNode* next;    /* Next field declaration */
+        } field_decl;
         
         /* Array declaration (NODE_ARRAY_DECL) */
         struct {
@@ -111,6 +122,19 @@ typedef struct ASTNode {
             char* var;                  /* Variable being assigned to */
             struct ASTNode* value;      /* Expression being assigned */
         } assign;
+
+        /* Struct member access (NODE_MEMBER_ACCESS) */
+        struct {
+            struct ASTNode* base;       /* Base expression (typically a variable) */
+            char* field;                /* Field name */
+        } member_access;
+
+        /* Struct member assignment (NODE_MEMBER_ASSIGN) */
+        struct {
+            struct ASTNode* base;       /* Base expression */
+            char* field;                /* Field name */
+            struct ASTNode* value;      /* Assigned expression */
+        } member_assign;
         
         /* Print expression (NODE_PRINT) */
         struct ASTNode* expr;
@@ -212,6 +236,7 @@ ASTNode* createStr(char* str);                                   /* Create strin
 ASTNode* createVar(char* name);                                  /* Create variable node */
 ASTNode* createBinOp(int op, ASTNode* left, ASTNode* right);   /* Create binary op node */
 ASTNode* createDecl(char* name, VarType type);                              /* Create declaration node */
+ASTNode* createStructDecl(char* name, const char* struct_name);             /* Create struct declaration node */
 ASTNode* createArrayDecl(char* name, VarType type, int size);   /* Create array declaration node */
 ASTNode* createArrayAccess(char* name, ASTNode* index);         /* Create array access node */
 ASTNode* createArrayAssign(char* name, ASTNode* index, ASTNode* value); /* Create array assignment node */
@@ -233,6 +258,11 @@ ASTNode* createSwitch(ASTNode* expr, ASTNode* cases);                           
 ASTNode* createCase(int value, int is_default, ASTNode* body);                           /* Create case/default node */
 ASTNode* appendCase(ASTNode* list, ASTNode* clause);                                     /* Append case node to list tail */
 ASTNode* createBreak(void);                                                               /* Create break node */
+ASTNode* createStructDef(char* name, ASTNode* fields);                                   /* Create struct definition node */
+ASTNode* createFieldDecl(char* name);                                                    /* Create field declaration node */
+ASTNode* appendField(ASTNode* list, ASTNode* field);                                     /* Append field to list tail */
+ASTNode* createMemberAccess(ASTNode* base, char* field);                                 /* Create member access node */
+ASTNode* createMemberAssign(ASTNode* base, char* field, ASTNode* value);                 /* Create member assignment node */
 
 /* AST DISPLAY FUNCTION */
 void printAST(ASTNode* node, int level);                        /* Pretty-print the AST */
