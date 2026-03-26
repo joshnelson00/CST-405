@@ -1,0 +1,15 @@
+struct Rect { int w; int h; int area; };
+
+void computeArea(struct Rect *r) {
+    r.area = r.w * r.h;
+    return;
+}
+
+int main() {
+    struct Rect box;
+    box.w = 6;
+    box.h = 7;
+    computeArea(&box);
+    print(box.area);
+    return 0;
+}

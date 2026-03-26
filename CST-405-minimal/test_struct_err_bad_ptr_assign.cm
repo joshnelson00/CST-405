@@ -1,0 +1,8 @@
+struct P { int x; };
+
+int main() {
+    struct P p;
+    struct P *pp;
+    pp = 5;
+    return 0;
+}

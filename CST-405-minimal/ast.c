@@ -254,7 +254,7 @@ void printAST(ASTNode* node, int level) {
             printAST(node->data.binop.right, level + 1);
             break;
         case NODE_DECL:
-            if (node->data.var.type == TYPE_STRUCT && node->data.var.struct_name) {
+            if ((node->data.var.type == TYPE_STRUCT || node->data.var.type == TYPE_STRUCT_PTR) && node->data.var.struct_name) {
                 printf("DECL %s (struct %s)\n", node->data.var.name, node->data.var.struct_name);
             } else {
                 printf("DECL %s (%s)\n", node->data.var.name,
@@ -311,8 +311,14 @@ void printAST(ASTNode* node, int level) {
             }
             break;
         case NODE_PARAM:
-            printf("PARAM: %s (%s)\n", node->data.param.name,
-                   node->data.param.type == TYPE_INT ? "int" : "float");
+            if (node->data.param.type == TYPE_STRUCT || node->data.param.type == TYPE_STRUCT_PTR) {
+                printf("PARAM: %s (struct %s%s)\n", node->data.param.name,
+                       node->data.param.struct_name ? node->data.param.struct_name : "<unknown>",
+                       node->data.param.type == TYPE_STRUCT_PTR ? "*" : "");
+            } else {
+                printf("PARAM: %s (%s)\n", node->data.param.name,
+                       node->data.param.type == TYPE_INT ? "int" : "float");
+            }
             break;
         case NODE_PARAM_LIST:
             printAST(node->data.param_list.param, level);
@@ -441,6 +447,10 @@ void printAST(ASTNode* node, int level) {
             printAST(node->data.member_assign.base, level + 1);
             printAST(node->data.member_assign.value, level + 1);
             break;
+        case NODE_ADDR_OF:
+            printf("ADDR_OF\n");
+            printAST(node->data.expr, level + 1);
+            break;
         default:
             printf("UNKNOWN NODE TYPE: %d\n", node->type);
             break;
@@ -473,6 +483,18 @@ ASTNode* createParam(char* name, VarType type) {
     node->data.param.name = strdup(name);
     node->data.param.type = type;
     node->data.param.is_array = 0;
+    node->data.param.struct_name = NULL;
+    return node;
+}
+
+/* Create a struct parameter node */
+ASTNode* createStructParam(char* name, const char* struct_name, int is_pointer) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_PARAM;
+    node->data.param.name = strdup(name);
+    node->data.param.type = is_pointer ? TYPE_STRUCT_PTR : TYPE_STRUCT;
+    node->data.param.is_array = 0;
+    node->data.param.struct_name = strdup(struct_name);
     return node;
 }
 
@@ -483,6 +505,7 @@ ASTNode* createArrayParam(char* name, VarType type) {
     node->data.param.name = strdup(name);
     node->data.param.type = type;
     node->data.param.is_array = 1;
+    node->data.param.struct_name = NULL;
     return node;
 }
 
@@ -661,5 +684,13 @@ ASTNode* createMemberAssign(ASTNode* base, char* field, ASTNode* value) {
     node->data.member_assign.base = base;
     node->data.member_assign.field = strdup(field);
     node->data.member_assign.value = value;
+    return node;
+}
+
+/* Create address-of expression node */
+ASTNode* createAddrOf(ASTNode* expr) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_ADDR_OF;
+    node->data.expr = expr;
     return node;
 }

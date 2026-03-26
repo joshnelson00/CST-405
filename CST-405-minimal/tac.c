@@ -177,14 +177,36 @@ char* generateTACExpr(ASTNode* node) {
             appendTAC(createTAC(TAC_ARRAY_READ, array_name, index, temp));
             return temp;
         }
-        case NODE_MEMBER_ACCESS: {
-            /* Session 1 supports parsing/type checks only; TAC lowering is Session 2. */
-            static int warned_member_access = 0;
-            if (!warned_member_access) {
-                fprintf(stderr, "TAC Notice: struct member reads are not lowered until Session 2; using 0 placeholder.\n");
-                warned_member_access = 1;
+        case NODE_ADDR_OF: {
+            if (!node->data.expr || node->data.expr->type != NODE_VAR) {
+                return NULL;
             }
-            return strdup("0");
+            char* temp = newTemp();
+            appendTAC(createTAC(TAC_ADDR_OF, node->data.expr->data.var.name, NULL, temp));
+            return temp;
+        }
+        case NODE_MEMBER_ACCESS: {
+            if (!node->data.member_access.base ||
+                node->data.member_access.base->type != NODE_VAR) {
+                return NULL;
+            }
+
+            char* base_name = node->data.member_access.base->data.var.name;
+            StructType* st = getVarStructType(base_name);
+            if (!st) {
+                return NULL;
+            }
+
+            int field_offset = getStructFieldOffset(st, node->data.member_access.field);
+            if (field_offset < 0) {
+                return NULL;
+            }
+
+            char offset_str[32];
+            snprintf(offset_str, sizeof(offset_str), "%d", field_offset);
+            char* temp = newTemp();
+            appendTAC(createTAC(TAC_MEMBER_LOAD, base_name, offset_str, temp));
+            return temp;
         }
         default:
             return NULL;
@@ -250,6 +272,14 @@ void generateTAC(ASTNode* node) {
             generateTAC(node->data.param_list.param);
             if (node->data.param_list.next) generateTAC(node->data.param_list.next);
             break;
+
+        case NODE_FUNC_CALL: {
+            if (node->data.func_call.args) {
+                generateTACArgList(node->data.func_call.args);
+            }
+            appendTAC(createTAC(TAC_FUNC_CALL, node->data.func_call.name, NULL, NULL));
+            break;
+        }
 
         case NODE_ARG_LIST:
             generateTACArgList(node);
@@ -483,12 +513,22 @@ void generateTAC(ASTNode* node) {
         }
 
         case NODE_MEMBER_ASSIGN: {
-            /* Session 1 supports semantic checks only; field writes are lowered in Session 2. */
-            static int warned_member_assign = 0;
-            if (!warned_member_assign) {
-                fprintf(stderr, "TAC Notice: struct member writes are not lowered until Session 2; skipping statement.\n");
-                warned_member_assign = 1;
+            if (!node->data.member_assign.base ||
+                node->data.member_assign.base->type != NODE_VAR) {
+                break;
             }
+
+            char* base_name = node->data.member_assign.base->data.var.name;
+            StructType* st = getVarStructType(base_name);
+            if (!st) break;
+
+            int field_offset = getStructFieldOffset(st, node->data.member_assign.field);
+            if (field_offset < 0) break;
+
+            char offset_str[32];
+            snprintf(offset_str, sizeof(offset_str), "%d", field_offset);
+            char* value = generateTACExpr(node->data.member_assign.value);
+            appendTAC(createTAC(TAC_MEMBER_STORE, base_name, offset_str, value));
             break;
         }
 
@@ -573,6 +613,15 @@ void printTACToFile(const char* filename) {
             case TAC_ARRAY_READ:
                 fprintf(file, " %d: ARRAY_READ %s[%s] -> %s    // Array access\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
+            case TAC_MEMBER_LOAD:
+                fprintf(file, " %d: MEMBER_LOAD %s + %s -> %s // Struct field read\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_MEMBER_STORE:
+                fprintf(file, " %d: MEMBER_STORE %s + %s = %s // Struct field write\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ADDR_OF:
+                fprintf(file, " %d: %s = &%s                  // Address-of\n", instrNum++, curr->result, curr->arg1);
+                break;
             case TAC_BOUNDS_CHECK:
                 fprintf(file, " %d: BOUNDS_CHECK %s[%s] < %s   // Runtime bounds check\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
@@ -647,6 +696,15 @@ void printTAC() {
                 break;
             case TAC_ARRAY_READ:
                 printf("ARRAY_READ %s[%s] -> %s\n", curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_MEMBER_LOAD:
+                printf("MEMBER_LOAD %s + %s -> %s\n", curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_MEMBER_STORE:
+                printf("MEMBER_STORE %s + %s = %s\n", curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ADDR_OF:
+                printf("%s = &%s\n", curr->result, curr->arg1);
                 break;
             case TAC_BOUNDS_CHECK:
                 printf("BOUNDS_CHECK %s[%s] < %s\n", curr->arg1, curr->arg2, curr->result);

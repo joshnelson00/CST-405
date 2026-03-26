@@ -642,6 +642,56 @@ int addStructVar(char* name, const char* struct_name) {
     return entry->offset;
 }
 
+int addStructPtrVar(char* name, const char* struct_name) {
+    if (!currentSymTab) {
+        fprintf(stderr, "❌ Error: No active symbol table\n");
+        return -1;
+    }
+
+    StructType* st = lookupStruct(struct_name);
+    if (!st) {
+        fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Unknown struct type '%s'\n", struct_name);
+        fprintf(stderr, "💡 Suggestion: define it first with: struct %s { ... };\n\n", struct_name);
+        semantic_error_count++;
+        return -1;
+    }
+
+    if (isVarDeclared(name)) {
+        fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+        fprintf(stderr, "   Variable '%s' is already declared in this scope\n", name);
+        fprintf(stderr, "💡 Suggestion: use a different variable name\n\n");
+        semantic_error_count++;
+        return -1;
+    }
+
+    if (currentSymTab->count >= MAX_VARS) {
+        fprintf(stderr, "❌ Error: Symbol table full (max %d variables)\n", MAX_VARS);
+        semantic_error_count++;
+        return -1;
+    }
+
+    Symbol* entry = &currentSymTab->vars[currentSymTab->count];
+    entry->name = strdup(name);
+    entry->type = TYPE_STRUCT_PTR;
+    entry->structType = st;
+    entry->isArray = 0;
+    entry->arraySize = 0;
+    entry->offset = currentSymTab->nextOffset;
+    entry->next = NULL;
+    currentSymTab->nextOffset += 4;
+    currentSymTab->count++;
+
+    unsigned int h = hash(name);
+    entry->next = currentSymTab->hash_table[h];
+    currentSymTab->hash_table[h] = entry;
+
+    struct_feature_used = 1;
+    printf("SYMBOL TABLE: Added struct pointer '%s' (struct %s*) at offset %d\n",
+           name, struct_name, entry->offset);
+    return entry->offset;
+}
+
 StructType* getVarStructType(char* name) {
     if (!currentSymTab || !name) return NULL;
 
@@ -654,6 +704,20 @@ StructType* getVarStructType(char* name) {
         node = node->next;
     }
     return NULL;
+}
+
+int isStructPointerVar(char* name) {
+    if (!currentSymTab || !name) return 0;
+
+    unsigned int h = hash(name);
+    Symbol* node = currentSymTab->hash_table[h];
+    while (node) {
+        if (strcmp(node->name, name) == 0) {
+            return node->type == TYPE_STRUCT_PTR;
+        }
+        node = node->next;
+    }
+    return 0;
 }
 
 int isArrayVar(char* name) {
@@ -682,7 +746,11 @@ void addParamsToScope(ASTNode* node) {
          * pass the argument-count check before addFunction() runs. */
         if (globalSymTab.current_func_index >= 0)
             globalSymTab.funcs[globalSymTab.current_func_index].param_count++;
-        if (node->data.param.is_array) {
+        if (node->data.param.type == TYPE_STRUCT_PTR) {
+            addStructPtrVar(node->data.param.name, node->data.param.struct_name);
+        } else if (node->data.param.type == TYPE_STRUCT) {
+            addStructVar(node->data.param.name, node->data.param.struct_name);
+        } else if (node->data.param.is_array) {
             /* Array parameters have unknown size at compile time.
              * Use a large placeholder size to avoid false bounds warnings. */
             addArrayVar(node->data.param.name, node->data.param.type, 9999);

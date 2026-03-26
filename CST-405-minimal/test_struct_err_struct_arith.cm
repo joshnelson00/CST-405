@@ -1,0 +1,9 @@
+struct P { int x; int y; };
+
+int main() {
+    struct P p;
+    struct P q;
+    int z;
+    z = p + q;
+    return 0;
+}
