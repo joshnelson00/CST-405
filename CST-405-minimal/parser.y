@@ -102,6 +102,8 @@ static int isIntegralExpr(ASTNode* expr) {
             return getFunctionReturnType(expr->data.func_call.name) == TYPE_INT;
         case NODE_MEMBER_ACCESS:
             return 1;
+        case NODE_ADDR_OF:
+            return 0;
         case NODE_BINOP:
             if (expr->data.binop.op == OP_EQ || expr->data.binop.op == OP_NE ||
                 expr->data.binop.op == OP_LT || expr->data.binop.op == OP_GT ||
@@ -129,6 +131,8 @@ static VarType inferExprType(ASTNode* expr) {
             return getVarType(expr->data.array_access.name);
         case NODE_MEMBER_ACCESS:
             return TYPE_INT; /* Session 1 fields are int-only. */
+        case NODE_ADDR_OF:
+            return TYPE_STRUCT_PTR;
         case NODE_FUNC_CALL:
             return getFunctionReturnType(expr->data.func_call.name);
         case NODE_BINOP: {
@@ -139,7 +143,8 @@ static VarType inferExprType(ASTNode* expr) {
                 expr->data.binop.op == OP_LE || expr->data.binop.op == OP_GE) {
                 return TYPE_INT;
             }
-            if (lt == TYPE_STRUCT || rt == TYPE_STRUCT) {
+            if (lt == TYPE_STRUCT || rt == TYPE_STRUCT ||
+                lt == TYPE_STRUCT_PTR || rt == TYPE_STRUCT_PTR) {
                 return TYPE_STRUCT;
             }
             return (lt == TYPE_FLOAT || rt == TYPE_FLOAT) ? TYPE_FLOAT : TYPE_INT;
@@ -425,6 +430,28 @@ param:
         $$ = createArrayParam($2, TYPE_FLOAT);  /* Float array parameter */
         free($2);
     }
+    | STRUCT ID '*' ID {
+        if (!lookupStruct($2)) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Unknown struct type '%s' in parameter\n", $2);
+            fprintf(stderr, "💡 Suggestion: define 'struct %s' before using it as a parameter type\n\n", $2);
+            semantic_error_count++;
+        }
+        $$ = createStructParam($4, $2, 1);
+        free($2);
+        free($4);
+    }
+    | STRUCT ID ID {
+        if (!lookupStruct($2)) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Unknown struct type '%s' in parameter\n", $2);
+            fprintf(stderr, "💡 Suggestion: define 'struct %s' before using it as a parameter type\n\n", $2);
+            semantic_error_count++;
+        }
+        $$ = createStructParam($3, $2, 0);
+        free($2);
+        free($3);
+    }
     ;
 
 /* STATEMENT LIST RULES */
@@ -493,6 +520,23 @@ decl:
         $$ = createStructDecl($3, $2);
         free($2);
         free($3);
+        printSymTab();
+    }
+    | STRUCT ID '*' ID ';' {
+        StructType* st = lookupStruct($2);
+        if (!st) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Unknown struct type '%s'\n", $2);
+            fprintf(stderr, "💡 Suggestion: define it first with: struct %s { ... };\n\n", $2);
+            semantic_error_count++;
+        } else {
+            addStructPtrVar($4, $2);
+        }
+
+        $$ = createDecl($4, TYPE_STRUCT_PTR);
+        $$->data.var.struct_name = strdup($2);
+        free($2);
+        free($4);
         printSymTab();
     }
     | INT ID '[' NUM ']' ';' {
@@ -590,6 +634,16 @@ assign:
                 fprintf(stderr, "   Cannot assign struct values directly\n");
                 fprintf(stderr, "💡 Suggestion: assign individual fields (e.g., p.x = value)\n\n");
                 semantic_error_count++;
+            } else if (lhs == TYPE_STRUCT_PTR && rhs != TYPE_STRUCT_PTR) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Pointer assignment requires an address value\n");
+                fprintf(stderr, "💡 Suggestion: use '&var' or another struct pointer expression\n\n");
+                semantic_error_count++;
+            } else if (lhs != TYPE_STRUCT_PTR && rhs == TYPE_STRUCT_PTR) {
+                fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+                fprintf(stderr, "   Cannot assign an address value to a non-pointer variable\n");
+                fprintf(stderr, "💡 Suggestion: assign pointer values only to 'struct T*' variables\n\n");
+                semantic_error_count++;
             } else if (lhs != rhs && rhs != TYPE_VOID) {
                 fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
                 fprintf(stderr, "   Type mismatch in assignment to '%s'\n", $1);
@@ -677,7 +731,7 @@ assign:
         if (inferExprType($5) == TYPE_STRUCT) {
             fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
             fprintf(stderr, "   Cannot assign a struct value to field '%s.%s'\n", $1, $3);
-            fprintf(stderr, "💡 Suggestion: fields in Session 1 structs are int values\n\n");
+            fprintf(stderr, "💡 Suggestion: fields currently store scalar values (int/float)\n\n");
             semantic_error_count++;
         }
 
@@ -709,10 +763,8 @@ expr:
             fprintf(stderr, "   • Check for typos in the variable name\n\n");
             semantic_error_count++;
         }
-        /* Note: array-as-scalar check is done in the assign rule context,
-         * since bare array names are valid as function arguments */
-        $$ = createVar($1);  
-        free($1);            
+        $$ = createVar($1);
+        free($1);
     }
     | AMP ID {
         if (!isVarDeclared($2)) {
@@ -721,18 +773,15 @@ expr:
             fprintf(stderr, "💡 Suggestion: declare it before taking its address\n\n");
             semantic_error_count++;
         }
-        fprintf(stderr, "\n⚠️  Semantic Error at line %d:\n", yyline);
-        fprintf(stderr, "   Address-of '&%s' is parsed but not enabled until Session 2\n", $2);
-        fprintf(stderr, "💡 Suggestion: defer pointer-based struct calls until Session 2 implementation\n\n");
-        semantic_error_count++;
-        $$ = createVar($2);
+        $$ = createAddrOf(createVar($2));
         free($2);
     }
     | func_call { 
         $$ = $1;  
     }
     | expr '+' expr { 
-        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT) {
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT ||
+            inferExprType($1) == TYPE_STRUCT_PTR || inferExprType($3) == TYPE_STRUCT_PTR) {
             fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
             fprintf(stderr, "   Struct values cannot be used with '+'\n");
             fprintf(stderr, "💡 Suggestion: use struct fields (e.g., p.x + p.y)\n\n");
@@ -741,7 +790,8 @@ expr:
         $$ = createBinOp('+', $1, $3);  
     }
     | expr '-' expr { 
-        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT) {
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT ||
+            inferExprType($1) == TYPE_STRUCT_PTR || inferExprType($3) == TYPE_STRUCT_PTR) {
             fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
             fprintf(stderr, "   Struct values cannot be used with '-'\n");
             fprintf(stderr, "💡 Suggestion: use struct fields (e.g., p.x - p.y)\n\n");
@@ -750,7 +800,8 @@ expr:
         $$ = createBinOp('-', $1, $3);  
     }
     | expr '*' expr { 
-        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT) {
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT ||
+            inferExprType($1) == TYPE_STRUCT_PTR || inferExprType($3) == TYPE_STRUCT_PTR) {
             fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
             fprintf(stderr, "   Struct values cannot be used with '*'\n");
             fprintf(stderr, "💡 Suggestion: multiply scalar fields instead\n\n");
@@ -759,7 +810,8 @@ expr:
         $$ = createBinOp('*', $1, $3);  
     }
     | expr '/' expr { 
-        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT) {
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT ||
+            inferExprType($1) == TYPE_STRUCT_PTR || inferExprType($3) == TYPE_STRUCT_PTR) {
             fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
             fprintf(stderr, "   Struct values cannot be used with '/'\n");
             fprintf(stderr, "💡 Suggestion: divide scalar fields instead\n\n");

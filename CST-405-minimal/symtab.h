@@ -35,7 +35,8 @@ typedef enum {
     TYPE_INT,
     TYPE_FLOAT,
     TYPE_VOID,
-    TYPE_STRUCT
+    TYPE_STRUCT,
+    TYPE_STRUCT_PTR
 } VarType;
 /* SYMBOL ENTRY - Information about each variable */
 typedef struct Symbol {
@@ -99,7 +100,9 @@ int registerStruct(StructType* st);
 StructType* lookupStruct(const char* name);
 int getStructFieldOffset(const StructType* st, const char* field_name);
 int addStructVar(char* name, const char* struct_name);
+int addStructPtrVar(char* name, const char* struct_name);
 StructType* getVarStructType(char* name);
+int isStructPointerVar(char* name);
 
 /* Tracks whether the parsed source used struct features (Session 1 support). */
 extern int struct_feature_used;

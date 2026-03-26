@@ -363,6 +363,9 @@ void optimizeTAC2() {
         case TAC_ARRAY_DECL:
         case TAC_ARRAY_WRITE:
         case TAC_ARRAY_READ:
+        case TAC_MEMBER_LOAD:
+        case TAC_MEMBER_STORE:
+        case TAC_ADDR_OF:
         case TAC_BOUNDS_CHECK:
         case TAC_DIV_CHECK:
         case TAC_LABEL:
@@ -384,6 +387,8 @@ typedef struct {
     int  offset;        // offset from $fp
     int  isLocalArray;  // 1 if declared with ARRAY_DECL (data lives on stack)
     int  isParam;       // 1 if function parameter (could be a pointer if used as array)
+    int  isLocalStruct; // 1 if local struct variable
+    int  isStructPtr;   // 1 if variable contains struct pointer value
 } MIPSGenVar;
 
 static MIPSGenVar mgVars[100];
@@ -394,13 +399,15 @@ static int mgFrameSize;
 
 static void mgReset(void) { mgVarCount = 0; mgNextOffset = 0; }
 
-static int mgAddVar(const char* name, int size, int isArr, int isPar) {
+static int mgAddVar(const char* name, int size, int isArr, int isPar, int isStruct, int isStructPtr) {
     int off = mgNextOffset;
     strncpy(mgVars[mgVarCount].name, name, 63);
     mgVars[mgVarCount].name[63] = '\0';
     mgVars[mgVarCount].offset = off;
     mgVars[mgVarCount].isLocalArray = isArr;
     mgVars[mgVarCount].isParam = isPar;
+    mgVars[mgVarCount].isLocalStruct = isStruct;
+    mgVars[mgVarCount].isStructPtr = isStructPtr;
     mgVarCount++;
     mgNextOffset += size;
     return off;
@@ -543,9 +550,13 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             exitFunction();
 
             // Build variable map: PARAMs first, then ARRAY_DECLs, then DECLs
+            enterFunction(fn);
             scan = curr->next;
             while (scan && scan->op != TAC_FUNC_DEF) {
-                if (scan->op == TAC_PARAM) mgAddVar(scan->arg1, 4, 0, 1);
+                if (scan->op == TAC_PARAM) {
+                    VarType pt = getVarType(scan->arg1);
+                    mgAddVar(scan->arg1, 4, 0, 1, 0, pt == TYPE_STRUCT_PTR);
+                }
                 scan = scan->next;
             }
             scan = curr->next;
@@ -553,7 +564,7 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
                 if (scan->op == TAC_ARRAY_DECL) {
                     for (int i = 0; i < arrCount; i++)
                         if (strcmp(arrNames[i], scan->arg1) == 0) {
-                            mgAddVar(scan->arg1, arrSizes[i] * 4, 1, 0);
+                            mgAddVar(scan->arg1, arrSizes[i] * 4, 1, 0, 0, 0);
                             break;
                         }
                 }
@@ -561,9 +572,20 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             }
             scan = curr->next;
             while (scan && scan->op != TAC_FUNC_DEF) {
-                if (scan->op == TAC_DECL) mgAddVar(scan->result, 4, 0, 0);
+                if (scan->op == TAC_DECL) {
+                    VarType vt = getVarType(scan->result);
+                    StructType* st = getVarStructType(scan->result);
+                    if (vt == TYPE_STRUCT && st) {
+                        mgAddVar(scan->result, st->totalSize, 0, 0, 1, 0);
+                    } else if (vt == TYPE_STRUCT_PTR) {
+                        mgAddVar(scan->result, 4, 0, 0, 0, 1);
+                    } else {
+                        mgAddVar(scan->result, 4, 0, 0, 0, 0);
+                    }
+                }
                 scan = scan->next;
             }
+            exitFunction();
 
             mgTempBase = mgNextOffset;
             int nTemps = (maxTemp >= 0) ? (maxTemp + 1) : 0;
@@ -692,6 +714,44 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             break;
         }
 
+        case TAC_MEMBER_LOAD: {
+            int vi = mgFind(curr->arg1);
+            if (vi < 0) break;
+            int fieldOff = mgConstInt(curr->arg2);
+
+            if (mgVars[vi].isStructPtr || mgVars[vi].isParam) {
+                fprintf(out, "    lw $t1, %d($fp)\n", mgVars[vi].offset);
+                fprintf(out, "    lw $t0, %d($t1)\n", fieldOff);
+            } else {
+                fprintf(out, "    lw $t0, %d($fp)\n", mgVars[vi].offset + fieldOff);
+            }
+            mgStore(out, curr->result, "$t0");
+            break;
+        }
+
+        case TAC_MEMBER_STORE: {
+            int vi = mgFind(curr->arg1);
+            if (vi < 0) break;
+            int fieldOff = mgConstInt(curr->arg2);
+            mgLoad(out, curr->result, "$t0");
+
+            if (mgVars[vi].isStructPtr || mgVars[vi].isParam) {
+                fprintf(out, "    lw $t1, %d($fp)\n", mgVars[vi].offset);
+                fprintf(out, "    sw $t0, %d($t1)\n", fieldOff);
+            } else {
+                fprintf(out, "    sw $t0, %d($fp)\n", mgVars[vi].offset + fieldOff);
+            }
+            break;
+        }
+
+        case TAC_ADDR_OF: {
+            int vi = mgFind(curr->arg1);
+            if (vi < 0) break;
+            fprintf(out, "    addiu $t0, $fp, %d\n", mgVars[vi].offset);
+            mgStore(out, curr->result, "$t0");
+            break;
+        }
+
         case TAC_PRINT:
             // Check if it's a string literal (starts with quote)
             if (curr->arg1 && curr->arg1[0] == '"') {
@@ -737,7 +797,7 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
                 } else {
                     int vi = mgFind(a);
                     if (vi >= 0) {
-                        if (mgVars[vi].isLocalArray)
+                        if (mgVars[vi].isLocalArray || mgVars[vi].isLocalStruct)
                             fprintf(out, "    addi $a%d, $fp, %d\n", i,
                                     mgVars[vi].offset);
                         else
@@ -913,6 +973,15 @@ void printOptimizedTAC2() {
             case TAC_ARRAY_READ:
                 printf("%2d: ARRAY_READ %s[%s] -> %s  // Array access\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
+            case TAC_MEMBER_LOAD:
+                printf("%2d: MEMBER_LOAD %s + %s -> %s // Struct field read\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_MEMBER_STORE:
+                printf("%2d: MEMBER_STORE %s + %s = %s // Struct field write\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ADDR_OF:
+                printf("%2d: %s = &%s // Address-of\n", instrNum++, curr->result, curr->arg1);
+                break;
             case TAC_BOUNDS_CHECK:
                 printf("%2d: BOUNDS_CHECK %s[%s] < %s // Runtime bounds check\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
@@ -1017,6 +1086,15 @@ void printOptimizedTACToFile2(const char* filename) {
             case TAC_ARRAY_READ:
                 fprintf(file, "%2d: ARRAY_READ %s[%s] -> %s  // Array access\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
+            case TAC_MEMBER_LOAD:
+                fprintf(file, "%2d: MEMBER_LOAD %s + %s -> %s // Struct field read\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_MEMBER_STORE:
+                fprintf(file, "%2d: MEMBER_STORE %s + %s = %s // Struct field write\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ADDR_OF:
+                fprintf(file, "%2d: %s = &%s // Address-of\n", instrNum++, curr->result, curr->arg1);
+                break;
             case TAC_BOUNDS_CHECK:
                 fprintf(file, "%2d: BOUNDS_CHECK %s[%s] < %s // Runtime bounds check\n", instrNum++, curr->arg1, curr->arg2, curr->result);
                 break;
@@ -1120,6 +1198,15 @@ void printTACToFile2(const char* filename) {
                 break;
             case TAC_ARRAY_READ:
                 fprintf(file, "%2d: ARRAY_READ %s[%s] -> %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_MEMBER_LOAD:
+                fprintf(file, "%2d: MEMBER_LOAD %s + %s -> %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_MEMBER_STORE:
+                fprintf(file, "%2d: MEMBER_STORE %s + %s = %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_ADDR_OF:
+                fprintf(file, "%2d: %s = &%s\n", instrNum++, curr->result, curr->arg1);
                 break;
             case TAC_BOUNDS_CHECK:
                 fprintf(file, "%2d: BOUNDS_CHECK %s[%s] < %s\n", instrNum++, curr->arg1, curr->arg2, curr->result);

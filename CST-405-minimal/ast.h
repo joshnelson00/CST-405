@@ -48,7 +48,8 @@ typedef enum {
     NODE_STRUCT_DEF,    /* Struct type definition */
     NODE_FIELD_DECL,    /* Struct field declaration */
     NODE_MEMBER_ACCESS, /* Struct member read (e.g., p.x) */
-    NODE_MEMBER_ASSIGN  /* Struct member write (e.g., p.x = 3) */
+    NODE_MEMBER_ASSIGN, /* Struct member write (e.g., p.x = 3) */
+    NODE_ADDR_OF        /* Address-of expression (e.g., &p) */
 } NodeType;
 
 /* Comparison operators for NODE_BINOP */
@@ -164,6 +165,7 @@ typedef struct ASTNode {
             char* name;                  /* Parameter name */
             VarType type;                /* Parameter type */
             int is_array;                /* 1 if array parameter */
+            char* struct_name;           /* Struct type name for struct params */
         } param;
         
         /* Parameter list (NODE_PARAM_LIST) */
@@ -245,6 +247,7 @@ ASTNode* createPrint(ASTNode* expr);                            /* Create print 
 ASTNode* createReturn(ASTNode* expr);                           /* Create return node */
 ASTNode* createFunc(char* name, VarType return_type, ASTNode* params, ASTNode* body);  /* Create function node */
 ASTNode* createParam(char* name, VarType type);                  /* Create parameter node */
+ASTNode* createStructParam(char* name, const char* struct_name, int is_pointer); /* Create struct param node */
 ASTNode* createArrayParam(char* name, VarType type);             /* Create array parameter node */
 ASTNode* createParamList(ASTNode* param, ASTNode* next);         /* Create parameter list */
 ASTNode* createFuncCall(char* name, ASTNode* args);              /* Create function call node */
@@ -263,6 +266,7 @@ ASTNode* createFieldDecl(char* name);                                           
 ASTNode* appendField(ASTNode* list, ASTNode* field);                                     /* Append field to list tail */
 ASTNode* createMemberAccess(ASTNode* base, char* field);                                 /* Create member access node */
 ASTNode* createMemberAssign(ASTNode* base, char* field, ASTNode* value);                 /* Create member assignment node */
+ASTNode* createAddrOf(ASTNode* expr);                                                     /* Create address-of node */
 
 /* AST DISPLAY FUNCTION */
 void printAST(ASTNode* node, int level);                        /* Pretty-print the AST */
