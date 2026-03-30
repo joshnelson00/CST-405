@@ -1,0 +1,130 @@
+Optimized TAC Instructions:
+─────────────────────────────
+ 1: FUNC sign_test          // Function definition
+ 2: PARAM x         // Function parameter
+ 3: DECL result           // Declare variable
+ 4: t0 = -1           // Assignment
+ 5: result = -1           // Assignment
+ 6: t1 = x > 0            // Greater than
+ 7: IF_FALSE t1 GOTO L0     // Conditional jump
+ 8: result = 7           // Assignment
+L0:                          // Loop label
+ 9: RETURN result        // Return value
+10: FUNC main          // Function definition
+11: DECL a           // Declare variable
+12: DECL b           // Declare variable
+13: DECL r           // Declare variable
+14: a = 10           // Assignment
+15: b = 5           // Assignment
+16: r = 0           // Assignment
+17: t2 = 1           // Assignment
+18: r = 1           // Assignment
+L1:                          // Loop label
+19: PRINT r          // Output value
+20: r = 0           // Assignment
+21: t3 = a > b            // Greater than
+22: IF_FALSE t3 GOTO L2     // Conditional jump
+23: r = 2           // Assignment
+24: GOTO L3                  // Unconditional jump
+L2:                          // Loop label
+25: r = 99           // Assignment
+L3:                          // Loop label
+26: PRINT r          // Output value
+27: r = 0           // Assignment
+28: t4 = b > a            // Greater than
+29: IF_FALSE t4 GOTO L4     // Conditional jump
+30: r = 99           // Assignment
+31: GOTO L5                  // Unconditional jump
+L4:                          // Loop label
+32: r = 3           // Assignment
+L5:                          // Loop label
+33: PRINT r          // Output value
+34: r = 0           // Assignment
+35: t5 = a > b            // Greater than
+36: IF_FALSE t5 GOTO L6     // Conditional jump
+37: t6 = a == 10           // Equality
+38: IF_FALSE t6 GOTO L8     // Conditional jump
+39: r = 4           // Assignment
+40: GOTO L9                  // Unconditional jump
+L8:                          // Loop label
+41: r = 99           // Assignment
+L9:                          // Loop label
+42: GOTO L7                  // Unconditional jump
+L6:                          // Loop label
+43: r = 99           // Assignment
+L7:                          // Loop label
+44: PRINT r          // Output value
+45: r = 0           // Assignment
+46: t7 = a < 5            // Less than
+47: IF_FALSE t7 GOTO L10     // Conditional jump
+48: r = 99           // Assignment
+49: GOTO L11                  // Unconditional jump
+L10:                          // Loop label
+50: t8 = a < 8            // Less than
+51: IF_FALSE t8 GOTO L12     // Conditional jump
+52: r = 99           // Assignment
+53: GOTO L13                  // Unconditional jump
+L12:                          // Loop label
+54: t9 = a < 15            // Less than
+55: IF_FALSE t9 GOTO L14     // Conditional jump
+56: r = 5           // Assignment
+57: GOTO L15                  // Unconditional jump
+L14:                          // Loop label
+58: r = 99           // Assignment
+L15:                          // Loop label
+L13:                          // Loop label
+L11:                          // Loop label
+59: PRINT r          // Output value
+60: r = 0           // Assignment
+61: t10 = b < a            // Less than
+62: IF_FALSE t10 GOTO L16     // Conditional jump
+63: r = 6           // Assignment
+L16:                          // Loop label
+64: PRINT "6 "          // Output value
+65: r = 0           // Assignment
+66: t11 = a <= 10           // Less or equal
+67: IF_FALSE t11 GOTO L17     // Conditional jump
+68: r = 6           // Assignment
+L17:                          // Loop label
+69: PRINT "6 "          // Output value
+70: r = 0           // Assignment
+71: t12 = a > b            // Greater than
+72: IF_FALSE t12 GOTO L18     // Conditional jump
+73: r = 6           // Assignment
+L18:                          // Loop label
+74: PRINT "6 "          // Output value
+75: r = 0           // Assignment
+76: t13 = a >= 10           // Greater or equal
+77: IF_FALSE t13 GOTO L19     // Conditional jump
+78: r = 6           // Assignment
+L19:                          // Loop label
+79: PRINT "6 "          // Output value
+80: r = 0           // Assignment
+81: t14 = a == 10           // Equality
+82: IF_FALSE t14 GOTO L20     // Conditional jump
+83: r = 6           // Assignment
+L20:                          // Loop label
+84: PRINT "6 "          // Output value
+85: r = 0           // Assignment
+86: t15 = a != b           // Not equal
+87: IF_FALSE t15 GOTO L21     // Conditional jump
+88: r = 6           // Assignment
+L21:                          // Loop label
+89: PRINT r          // Output value
+90: ARG a            // Function argument
+91: t16 = CALL sign_test       // Function call
+92: r = t16           // Assignment
+93: PRINT t16          // Output value
+94: r = 0           // Assignment
+95: t17 = a > b            // Greater than
+96: IF_FALSE t17 GOTO L22     // Conditional jump
+97: t18 = b > a            // Greater than
+98: IF_FALSE t18 GOTO L23     // Conditional jump
+99: r = 99           // Assignment
+100: GOTO L24                  // Unconditional jump
+L23:                          // Loop label
+101: r = 8           // Assignment
+L24:                          // Loop label
+L22:                          // Loop label
+102: PRINT r          // Output value
+103: RETURN 0        // Return value

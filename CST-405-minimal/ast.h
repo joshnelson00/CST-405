@@ -59,6 +59,9 @@ typedef enum {
 #define OP_GT 1003  /* > */
 #define OP_LE 1004  /* <= */
 #define OP_GE 1005  /* >= */
+#define OP_AND 1006 /* && */
+#define OP_OR  1007 /* || */
+#define OP_NOT 1008 /* ! (unary, uses left operand) */
 
 /* AST NODE STRUCTURE
  * Uses a union to efficiently store different node data

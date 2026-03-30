@@ -244,6 +244,9 @@ void printAST(ASTNode* node, int level) {
                     case OP_GT: op_str = ">"; break;
                     case OP_LE: op_str = "<="; break;
                     case OP_GE: op_str = ">="; break;
+                    case OP_AND: op_str = "&&"; break;
+                    case OP_OR: op_str = "||"; break;
+                    case OP_NOT: op_str = "!"; break;
                     default: op_str = "?"; break;
                 }
                 printf("BINOP: %s\n", op_str);

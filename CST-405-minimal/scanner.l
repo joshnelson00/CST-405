@@ -63,6 +63,9 @@ int yycolumn = 1;
 "!="            { yycolumn += yyleng; return NE; }
 "<="            { yycolumn += yyleng; return LE; }
 ">="            { yycolumn += yyleng; return GE; }
+"&&"            { yycolumn += yyleng; return AND; }
+"||"            { yycolumn += yyleng; return OR; }
+"!"             { yycolumn++; return NOT; }
 "<"             { yycolumn++; return LT; }
 ">"             { yycolumn++; return GT; }
 "+"             { yycolumn++; return '+'; }

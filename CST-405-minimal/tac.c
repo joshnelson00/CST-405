@@ -115,11 +115,58 @@ char* generateTACExpr(ASTNode* node) {
         case NODE_VAR:
             return strdup(node->data.var.name);
         case NODE_BINOP: {
+            int op = node->data.binop.op;
+
+            if (op == OP_NOT) {
+                char* operand = generateTACExpr(node->data.binop.left);
+                char* temp = newTemp();
+                appendTAC(createTAC(TAC_EQ, operand, "0", temp));
+                return temp;
+            }
+
+            if (op == OP_AND) {
+                char* left = generateTACExpr(node->data.binop.left);
+                char* temp = newTemp();
+                char* false_lbl = newLabel();
+                char* end_lbl = newLabel();
+
+                appendTAC(createTAC(TAC_IF_FALSE, left, NULL, false_lbl));
+                char* right = generateTACExpr(node->data.binop.right);
+                appendTAC(createTAC(TAC_IF_FALSE, right, NULL, false_lbl));
+                appendTAC(createTAC(TAC_ASSIGN, "1", NULL, temp));
+                appendTAC(createTAC(TAC_GOTO, end_lbl, NULL, NULL));
+                appendTAC(createTAC(TAC_LABEL, false_lbl, NULL, NULL));
+                appendTAC(createTAC(TAC_ASSIGN, "0", NULL, temp));
+                appendTAC(createTAC(TAC_LABEL, end_lbl, NULL, NULL));
+                return temp;
+            }
+
+            if (op == OP_OR) {
+                char* left = generateTACExpr(node->data.binop.left);
+                char* temp = newTemp();
+                char* eval_right_lbl = newLabel();
+                char* false_lbl = newLabel();
+                char* end_lbl = newLabel();
+
+                appendTAC(createTAC(TAC_IF_FALSE, left, NULL, eval_right_lbl));
+                appendTAC(createTAC(TAC_ASSIGN, "1", NULL, temp));
+                appendTAC(createTAC(TAC_GOTO, end_lbl, NULL, NULL));
+                appendTAC(createTAC(TAC_LABEL, eval_right_lbl, NULL, NULL));
+                char* right = generateTACExpr(node->data.binop.right);
+                appendTAC(createTAC(TAC_IF_FALSE, right, NULL, false_lbl));
+                appendTAC(createTAC(TAC_ASSIGN, "1", NULL, temp));
+                appendTAC(createTAC(TAC_GOTO, end_lbl, NULL, NULL));
+                appendTAC(createTAC(TAC_LABEL, false_lbl, NULL, NULL));
+                appendTAC(createTAC(TAC_ASSIGN, "0", NULL, temp));
+                appendTAC(createTAC(TAC_LABEL, end_lbl, NULL, NULL));
+                return temp;
+            }
+
             char* left = generateTACExpr(node->data.binop.left);
             char* right = generateTACExpr(node->data.binop.right);
             char* temp = newTemp();
 
-            switch(node->data.binop.op) {
+            switch(op) {
                 case '+':
                     appendTAC(createTAC(TAC_ADD, left, right, temp));
                     break;
@@ -150,6 +197,9 @@ char* generateTACExpr(ASTNode* node) {
                     break;
                 case OP_GE:
                     appendTAC(createTAC(TAC_GE, left, right, temp));
+                    break;
+                default:
+                    fprintf(stderr, "TAC Error: unsupported binary operator %d\n", op);
                     break;
             }
             return temp;

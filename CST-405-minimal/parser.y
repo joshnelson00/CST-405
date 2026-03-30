@@ -107,8 +107,12 @@ static int isIntegralExpr(ASTNode* expr) {
         case NODE_BINOP:
             if (expr->data.binop.op == OP_EQ || expr->data.binop.op == OP_NE ||
                 expr->data.binop.op == OP_LT || expr->data.binop.op == OP_GT ||
-                expr->data.binop.op == OP_LE || expr->data.binop.op == OP_GE) {
+                expr->data.binop.op == OP_LE || expr->data.binop.op == OP_GE ||
+                expr->data.binop.op == OP_AND || expr->data.binop.op == OP_OR) {
                 return 1;
+            }
+            if (expr->data.binop.op == OP_NOT) {
+                return isIntegralExpr(expr->data.binop.left);
             }
             return isIntegralExpr(expr->data.binop.left) &&
                    isIntegralExpr(expr->data.binop.right);
@@ -140,7 +144,9 @@ static VarType inferExprType(ASTNode* expr) {
             VarType rt = inferExprType(expr->data.binop.right);
             if (expr->data.binop.op == OP_EQ || expr->data.binop.op == OP_NE ||
                 expr->data.binop.op == OP_LT || expr->data.binop.op == OP_GT ||
-                expr->data.binop.op == OP_LE || expr->data.binop.op == OP_GE) {
+                expr->data.binop.op == OP_LE || expr->data.binop.op == OP_GE ||
+                expr->data.binop.op == OP_AND || expr->data.binop.op == OP_OR ||
+                expr->data.binop.op == OP_NOT) {
                 return TYPE_INT;
             }
             if (lt == TYPE_STRUCT || rt == TYPE_STRUCT ||
@@ -232,6 +238,7 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %token SWITCH CASE DEFAULT BREAK
 %token STRUCT DOT AMP
 %token EQ NE LT GT LE GE   /* Comparison operators */
+%token AND OR NOT
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
 %type <node> program struct_defs_opt struct_def field_list field_decl func_list func param_list param stmt_list stmt stmt_list_opt decl assign expr print_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update if_stmt switch_stmt break_stmt case_clause_list_opt case_clause_list case_clause
@@ -241,9 +248,12 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 /* Dangling-else: LOWER_THAN_ELSE < ELSE so shift always wins → else attaches to nearest if */
 %nonassoc LOWER_THAN_ELSE
 %nonassoc ELSE
+%left OR
+%left AND
 %left EQ NE LT GT LE GE
 %left '+' '-'
 %left '*' '/'
+%right NOT
 %left DOT
 
 %%
@@ -836,6 +846,35 @@ expr:
     }
     | expr GE expr {
         $$ = createBinOp(OP_GE, $1, $3);
+    }
+    | expr AND expr {
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT ||
+            inferExprType($1) == TYPE_STRUCT_PTR || inferExprType($3) == TYPE_STRUCT_PTR) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct values cannot be used with '&&'\n");
+            fprintf(stderr, "💡 Suggestion: compare scalar fields and combine those results\n\n");
+            semantic_error_count++;
+        }
+        $$ = createBinOp(OP_AND, $1, $3);
+    }
+    | expr OR expr {
+        if (inferExprType($1) == TYPE_STRUCT || inferExprType($3) == TYPE_STRUCT ||
+            inferExprType($1) == TYPE_STRUCT_PTR || inferExprType($3) == TYPE_STRUCT_PTR) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct values cannot be used with '||'\n");
+            fprintf(stderr, "💡 Suggestion: compare scalar fields and combine those results\n\n");
+            semantic_error_count++;
+        }
+        $$ = createBinOp(OP_OR, $1, $3);
+    }
+    | NOT expr %prec NOT {
+        if (inferExprType($2) == TYPE_STRUCT || inferExprType($2) == TYPE_STRUCT_PTR) {
+            fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
+            fprintf(stderr, "   Struct values cannot be used with '!'\n");
+            fprintf(stderr, "💡 Suggestion: negate a scalar comparison result instead\n\n");
+            semantic_error_count++;
+        }
+        $$ = createBinOp(OP_NOT, $2, NULL);
     }
     | '(' expr ')' {
         $$ = $2;
