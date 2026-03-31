@@ -23,16 +23,47 @@ extern ASTNode* root;
 extern int syntax_error_count;
 extern int semantic_error_count;
 
+static void write_benchmark_line(FILE* report, const char* phase, BenchmarkResult* bench) {
+    if (!report || !phase || !bench) return;
+    fprintf(report, "%s\n", phase);
+    fprintf(report, "  CPU Time: %.6f seconds\n", bench->cpu_time);
+    fprintf(report, "  Wall Time: %.6f seconds\n", bench->wall_time);
+    fprintf(report, "  Memory Delta: %.2f KB\n", bench->peak_memory / 1024.0);
+}
+
 int main(int argc, char* argv[]) {
+    const char* reportFile = "report.txt";
+    FILE* report = fopen(reportFile, "w");
+    if (!report) {
+        fprintf(stderr, "Error: Cannot open report file '%s'\n", reportFile);
+        return 1;
+    }
+
     if (argc != 3) {
         printf("Usage: %s <input.c> <output.s>\n", argv[0]);
         printf("Example: ./minicompiler test.c output.s\n");
+        fprintf(report, "Compilation Report\n");
+        fprintf(report, "Status: FAILED\n");
+        fprintf(report, "Reason: invalid command-line arguments\n");
+        fclose(report);
         return 1;
     }
+
+    time_t now = time(NULL);
+    fprintf(report, "Compilation Report\n");
+    fprintf(report, "Input: %s\n", argv[1]);
+    fprintf(report, "Output: %s\n", argv[2]);
+    if (now != (time_t)-1) {
+        fprintf(report, "Timestamp: %s", ctime(&now));
+    }
+    fprintf(report, "\n");
     
     yyin = fopen(argv[1], "r");
     if (!yyin) {
         fprintf(stderr, "Error: Cannot open input file '%s'\n", argv[1]);
+        fprintf(report, "Status: FAILED\n");
+        fprintf(report, "Reason: cannot open input file\n");
+        fclose(report);
         return 1;
     }
     
@@ -55,6 +86,7 @@ int main(int argc, char* argv[]) {
     initGlobalSymTab();  /* Initialize global symbol table */
     initSymTab();        /* Initialize symbol table */
     end_benchmark(bench_init, "Phase 0: Initialization");
+    write_benchmark_line(report, "Phase 0: Initialization", bench_init);
     free(bench_init);
 
     /* PHASE 1: Lexical and Syntax Analysis */
@@ -70,13 +102,20 @@ int main(int argc, char* argv[]) {
     BenchmarkResult* bench_parse = start_benchmark();
     int parse_result = yyparse();
     end_benchmark(bench_parse, "Phase 1: Lexical & Syntax Analysis");
+    write_benchmark_line(report, "Phase 1: Lexical & Syntax Analysis", bench_parse);
     free(bench_parse);
     
     int total_errors = syntax_error_count + semantic_error_count;
     
     if (parse_result == 0 && total_errors == 0) {
-        const char* unoptimizedTacFile = "unoptimizedtac.txt";
-        const char* optimizedTacFile = "tac.txt";
+        const char* unoptimizedTacFile = "tac_unopt.txt";
+        const char* optimizedTacFile = "tac_opt.txt";
+        const char* transcriptFile = "output_transcript.txt";
+
+        fprintf(report, "Status: SUCCESS\n");
+        fprintf(report, "Syntax Errors: %d\n", syntax_error_count);
+        fprintf(report, "Semantic Errors: %d\n", semantic_error_count);
+        fprintf(report, "Total Errors: %d\n\n", total_errors);
 
         printf("✓ Parse successful - program is syntactically and semantically correct!\n\n");
         
@@ -89,6 +128,7 @@ int main(int argc, char* argv[]) {
         BenchmarkResult* bench_ast = start_benchmark();
         printAST(root, 0);
         end_benchmark(bench_ast, "Phase 2: AST Display");
+        write_benchmark_line(report, "Phase 2: AST Display", bench_ast);
         free(bench_ast);
         printf("\n");
         
@@ -106,8 +146,10 @@ int main(int argc, char* argv[]) {
         printTAC();
         printTACToFile2(unoptimizedTacFile);
         end_benchmark(bench_tac, "Phase 3: TAC Generation");
+        write_benchmark_line(report, "Phase 3: TAC Generation", bench_tac);
         free(bench_tac);
         printf("✓ Unoptimized TAC written to: %s\n", unoptimizedTacFile);
+        fprintf(report, "Unoptimized TAC file: %s\n", unoptimizedTacFile);
         printf("\n");
         
         /* PHASE 4: Optimization */
@@ -126,8 +168,10 @@ int main(int argc, char* argv[]) {
         printOptimizedTAC2();
         printOptimizedTACToFile2(optimizedTacFile);
         end_benchmark(bench_opt, "Phase 4: Optimization");
+        write_benchmark_line(report, "Phase 4: Optimization", bench_opt);
         free(bench_opt);
         printf("✓ Optimized TAC written to: %s\n", optimizedTacFile);
+        fprintf(report, "Optimized TAC file: %s\n", optimizedTacFile);
         printf("\n");
         
         /* PHASE 5: Code Generation */
@@ -142,8 +186,36 @@ int main(int argc, char* argv[]) {
         BenchmarkResult* bench_mips = start_benchmark();
         generateMIPSFromOptimizedTAC2(argv[2]);
         end_benchmark(bench_mips, "Phase 5: MIPS Code Generation");
+        write_benchmark_line(report, "Phase 5: MIPS Code Generation", bench_mips);
         free(bench_mips);
         printf("✓ MIPS assembly code generated to: %s\n", argv[2]);
+        fprintf(report, "MIPS output file: %s\n", argv[2]);
+        printf("\n");
+
+        /* PHASE 6: SPIM transcript capture */
+        printf("┌──────────────────────────────────────────────────────────┐\n");
+        printf("│ PHASE 6: SPIM EXECUTION TRANSCRIPT                      │\n");
+        printf("├──────────────────────────────────────────────────────────┤\n");
+        printf("│ Running generated assembly and capturing console output  │\n");
+        printf("└──────────────────────────────────────────────────────────┘\n");
+
+        BenchmarkResult* bench_spim = start_benchmark();
+        char spim_cmd[1024];
+        snprintf(spim_cmd, sizeof(spim_cmd),
+                 "spim -file \"%s\" > \"%s\" 2>&1", argv[2], transcriptFile);
+        int spim_status = system(spim_cmd);
+        end_benchmark(bench_spim, "Phase 6: SPIM Transcript Capture");
+        write_benchmark_line(report, "Phase 6: SPIM Transcript Capture", bench_spim);
+        free(bench_spim);
+
+        if (spim_status == 0) {
+            printf("✓ SPIM transcript written to: %s\n", transcriptFile);
+            fprintf(report, "SPIM transcript file: %s\n", transcriptFile);
+        } else {
+            printf("⚠ SPIM execution failed (see %s for details)\n", transcriptFile);
+            fprintf(report, "SPIM transcript file: %s\n", transcriptFile);
+            fprintf(report, "SPIM status: FAILED (%d)\n", spim_status);
+        }
         printf("\n");
         
         // Clean up memory to prevent leaks
@@ -153,6 +225,7 @@ int main(int argc, char* argv[]) {
         
         // Print total compilation time
         end_benchmark(bench_total, "TOTAL COMPILATION TIME");
+        write_benchmark_line(report, "TOTAL COMPILATION TIME", bench_total);
         free(bench_total);
         
         printf("\n╔════════════════════════════════════════════════════════════╗\n");
@@ -160,6 +233,15 @@ int main(int argc, char* argv[]) {
         printf("║         Run the output file in a MIPS simulator            ║\n");
         printf("╚════════════════════════════════════════════════════════════╝\n");
     } else {
+        fprintf(report, "Status: FAILED\n");
+        fprintf(report, "Syntax Errors: %d\n", syntax_error_count);
+        fprintf(report, "Semantic Errors: %d\n", semantic_error_count);
+        fprintf(report, "Total Errors: %d\n\n", total_errors);
+
+        end_benchmark(bench_total, "TOTAL COMPILATION TIME");
+        write_benchmark_line(report, "TOTAL COMPILATION TIME", bench_total);
+        free(bench_total);
+
         printf("\n");
         printf("╔══════════════════════════════════════════════════════════════╗\n");
         printf("║                   ❌ COMPILATION FAILED                      ║\n");
@@ -185,9 +267,13 @@ int main(int argc, char* argv[]) {
         printf("║    • Check for unmatched braces '{' '}'                     ║\n");
         printf("║    • Access arrays with subscript: arr[index]               ║\n");
         printf("╚══════════════════════════════════════════════════════════════╝\n");
+        fclose(report);
+        fclose(yyin);
         return 1;
     }
     
+    fprintf(report, "\nReport file: %s\n", reportFile);
+    fclose(report);
     fclose(yyin);
     return 0;
 }

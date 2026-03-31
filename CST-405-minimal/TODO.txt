@@ -1,6 +1,3 @@
-1. Implement true global variable support end-to-end (parser -> AST -> symtab -> TAC -> MIPS)
-2. Implement first-class string variable type support end-to-end
-3. Implement char print semantics (character output instead of ASCII integer)
-4. Add robust post-parse unresolved function-call validation
-5. Improve numeric coercion/cast behavior for int/float expressions and assignments
-6. See implementation_todo.md for full pipeline tasks and test plan
+1. Chars/Strings
+2. Type coercion
+3. Document extensively that optimization is not conditional in our compilers

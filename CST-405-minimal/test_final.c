@@ -166,11 +166,8 @@ int main() {
         data[j] = j * j;
     }
     for (j = 0; j < 5; j = j + 1) {
-        write(data[j]);   /* 0 1 4 9 16 */
-        write(" ");
+        print(data[j]);   /* 0 1 4 9 16 */
     }
-    print("");
-
 
     /* ── 3d. nested loops: multiplication table (2x3) ───── */
     int row;
@@ -179,10 +176,8 @@ int main() {
     for (row = 1; row <= 2; row = row + 1) {
         for (col = 1; col <= 3; col = col + 1) {
             product = row * col;
-            write(product);  /* 1 2 3  2 4 6 */
-            write(" ");
+            print(product);  /* 1 2 3  2 4 6 */
         }
-        print("");
     }
 
     /* ── 3e. while loop inside a for loop ────────────────── */
@@ -195,10 +190,8 @@ int main() {
             acc = acc + 1;
             k = k + 1;
         }
-        write(acc);   /* 1  2  3 */
-        write(" ");
+        print(acc);   /* 1  2  3 */
     }
-    print("");
 
 
 /* =========================================================
@@ -316,13 +309,11 @@ int main() {
     n = 2;
     while (n < 7) {
         fibNext = fibA + fibB;
-        write(fibNext);   /* 1 2 3 5 8 */
-        write(" ");
+        print(fibNext);   /* 1 2 3 5 8 */
         fibA = fibB;
         fibB = fibNext;
         n = n + 1;
     }
-    print("");
 
     /* ── 5b. Fibonacci via recursion (fib(6) = 8) ────────── */
     int fibR;
