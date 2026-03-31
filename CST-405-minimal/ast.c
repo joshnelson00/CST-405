@@ -60,12 +60,12 @@ ASTNode* createFlt(double value) {
 ASTNode* createStr(char* str) {
     ASTNode* node = ast_alloc(sizeof(ASTNode));
     node->type = NODE_STR;
-    /* Remove quotes and process escape sequences */
+    /* Scanner now provides raw string contents without surrounding quotes. */
     int len = strlen(str);
     char* processed = malloc(len + 1);
     int j = 0;
-    for (int i = 1; i < len - 1; i++) {  /* Skip opening and closing quotes */
-        if (str[i] == '\\' && i + 1 < len - 1) {
+    for (int i = 0; i < len; i++) {
+        if (str[i] == '\\' && i + 1 < len) {
             switch (str[i + 1]) {
                 case 'n': processed[j++] = '\n'; i++; break;
                 case 't': processed[j++] = '\t'; i++; break;
@@ -179,6 +179,14 @@ ASTNode* createPrint(ASTNode* expr) {
     return node;
 }
 
+/* Create a write statement node (no trailing newline) */
+ASTNode* createWrite(ASTNode* expr) {
+    ASTNode* node = ast_alloc(sizeof(ASTNode));
+    node->type = NODE_WRITE;
+    node->data.expr = expr;
+    return node;
+}
+
 /* Create a statement list node (links statements together) */
 ASTNode* createStmtList(ASTNode* stmt1, ASTNode* stmt2) {
     ASTNode* node = ast_alloc(sizeof(ASTNode));
@@ -286,6 +294,10 @@ void printAST(ASTNode* node, int level) {
             break;
         case NODE_PRINT:
             printf("PRINT\n");
+            printAST(node->data.expr, level + 1);
+            break;
+        case NODE_WRITE:
+            printf("WRITE\n");
             printAST(node->data.expr, level + 1);
             break;
         case NODE_RETURN:

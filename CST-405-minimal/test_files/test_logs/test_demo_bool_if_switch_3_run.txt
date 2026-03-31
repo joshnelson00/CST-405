@@ -1,0 +1,359 @@
+=== COMMANDS ===
+./minicompiler test_files/test_demo_bool_if_switch_3.cm mips.s
+spim -file mips.s
+
+=== COMPILER OUTPUT ===
+
+╔════════════════════════════════════════════════════════════╗
+║          MINIMAL C COMPILER - EDUCATIONAL VERSION          ║
+╚════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────┐
+│ PHASE 0: VARIOUS INITIALIZATIONS                         │
+└──────────────────────────────────────────────────────────┘
+GLOBAL SYMBOL TABLE: Initialized
+SYMBOL TABLE: Initialized with hash table (O(1) lookup)
+
+=== SYMBOL TABLE ===
+Count: 0, NextOffset: 0
+==================
+
+=== Phase 0: Initialization Performance ===
+CPU Time: 0.000039 seconds
+Wall Time: 0.000039 seconds
+Memory Delta: 16.00 KB
+┌──────────────────────────────────────────────────────────┐
+│ PHASE 1: LEXICAL & SYNTAX ANALYSIS                       │
+├──────────────────────────────────────────────────────────┤
+│ • Reading source file: test_files/test_demo_bool_if_switch_3.cm
+│ • Tokenizing input (scanner.l)
+│ • Parsing grammar rules (parser.y)
+│ • Building Abstract Syntax Tree
+└──────────────────────────────────────────────────────────┘
+PREPARE FUNCTION SCOPE: 'main' (int) - scope activated
+SYMBOL TABLE: Added 'mode' (int) at offset 0 [hash=24]
+MEMORY POOL: Allocated new 4KB pool
+
+=== SYMBOL TABLE ===
+Count: 1, NextOffset: 4
+  mode (int) -> offset 0
+==================
+SYMBOL TABLE: Added 'flag' (int) at offset 4 [hash=200]
+
+=== SYMBOL TABLE ===
+Count: 2, NextOffset: 8
+  mode (int) -> offset 0
+  flag (int) -> offset 4
+==================
+EXIT FUNCTION: 'main' (scope deactivated)
+GLOBAL SYMBOL TABLE: Updated function 'main' with AST (0 params)
+
+=== Phase 1: Lexical & Syntax Analysis Performance ===
+CPU Time: 0.000107 seconds
+Wall Time: 0.000108 seconds
+Memory Delta: 16.00 KB
+✓ Parse successful - program is syntactically and semantically correct!
+
+┌──────────────────────────────────────────────────────────┐
+│ PHASE 2: ABSTRACT SYNTAX TREE (AST)                      │
+├──────────────────────────────────────────────────────────┤
+│ Tree structure representing the program hierarchy:       │
+└──────────────────────────────────────────────────────────┘
+FUNC: main (int)
+  DECL mode (int)
+  DECL flag (int)
+  ASSIGN: mode =
+    NUM: 2
+  ASSIGN: flag =
+    NUM: 1
+  IF (with else)
+    CONDITION:
+      BINOP: &&
+        VAR: flag
+        BINOP: >=
+          VAR: mode
+          NUM: 2
+    THEN:
+      SWITCH
+        EXPR:
+          VAR: mode
+        CASES:
+          CASE 1:
+            PRINT
+              NUM: 901
+            BREAK
+          CASE 2:
+            IF (with else)
+              CONDITION:
+                BINOP: ||
+                  VAR: flag
+                  NUM: 0
+              THEN:
+                PRINT
+                  NUM: 500
+              ELSE:
+                PRINT
+                  NUM: 902
+            BREAK
+          DEFAULT:
+            PRINT
+              NUM: 903
+            BRE
+⚡ Optimizer [dead-branch]: IF_FALSE 1 GOTO L0 → removed (branch never taken)
+
+
+⚡ Optimizer [dead-branch]: IF_FALSE 1 GOTO L0 → removed (branch never taken)
+
+
+⚡ Optimizer [if(0)]: condition always false → replacing with GOTO L11
+
+AK
+    ELSE:
+      PRINT
+        NUM: 904
+  IF (with else)
+    CONDITION:
+      BINOP: ||
+        BINOP: !
+          VAR: flag
+        BINOP: ==
+          VAR: mode
+          NUM: 2
+    THEN:
+      PRINT
+        NUM: 600
+    ELSE:
+      PRINT
+        NUM: 905
+  RETURN
+    NUM: 0
+
+=== Phase 2: AST Display Performance ===
+CPU Time: 0.000065 seconds
+Wall Time: 0.000065 seconds
+Memory Delta: 0.00 KB
+
+┌──────────────────────────────────────────────────────────┐
+│ PHASE 3: INTERMEDIATE CODE GENERATION                    │
+├──────────────────────────────────────────────────────────┤
+│ Three-Address Code (TAC) - simplified instructions:      │
+│ • Each instruction has at most 3 operands                │
+│ • Temporary variables (t0, t1, ...) for expressions      │
+└──────────────────────────────────────────────────────────┘
+ENTER FUNCTION: 'main' (scope activated)
+EXIT FUNCTION: 'main' (scope deactivated)
+Unoptimized TAC Instructions:
+─────────────────────────────
+ 1: FUNC main
+ 2: DECL mode
+ 3: DECL flag
+ 4: mode = 2
+ 5: flag = 1
+ 6: IF_FALSE flag GOTO L0
+ 7: t1 = mode >= 2
+ 8: IF_FALSE t1 GOTO L0
+ 9: t0 = 1
+10: GOTO L1
+11: L0:
+12: t0 = 0
+13: L1:
+14: IF_FALSE t0 GOTO L2
+15: DECL __sw7
+16: __sw7 = mode
+17: t2 = __sw7 == 1
+18: IF_FALSE t2 GOTO L9
+19: GOTO L4
+20: L9:
+21: t3 = __sw7 == 2
+22: IF_FALSE t3 GOTO L7
+23: GOTO L5
+24: L7:
+25: GOTO L6
+26: L4:
+27: PRINT 901
+28: GOTO L8
+29: L5:
+30: IF_FALSE flag GOTO L10
+31: t4 = 1
+32: GOTO L12
+33: L10:
+34: IF_FALSE 0 GOTO L11
+35: t4 = 1
+36: GOTO L12
+37: L11:
+38: t4 = 0
+39: L12:
+40: IF_FALSE t4 GOTO L13
+41: PRINT 500
+42: GOTO L14
+43: L13:
+44: PRINT 902
+45: L14:
+46: GOTO L8
+47: L6:
+48: PRINT 903
+49: GOTO L8
+50: L8:
+51: GOTO L3
+52: L2:
+53: PRINT 904
+54: L3:
+55: t5 = flag == 0
+56: IF_FALSE t5 GOTO L15
+57: t6 = 1
+58: GOTO L17
+59: L15:
+60: t7 = mode == 2
+61: IF_FALSE t7 GOTO L16
+62: t6 = 1
+63: GOTO L17
+64: L16:
+65: t6 = 0
+66: L17:
+67: IF_FALSE t6 GOTO L18
+68: PRINT 600
+69: GOTO L19
+70: L18:
+71: PRINT 905
+72: L19:
+73: RETURN 0
+
+
+=== Phase 3: TAC Generation Performance ===
+CPU Time: 0.000192 seconds
+Wall Time: 0.000199 seconds
+Memory Delta: 16.00 KB
+✓ Unoptimized TAC written to: unoptimizedtac.txt
+
+┌──────────────────────────────────────────────────────────┐
+│ PHASE 4: CODE OPTIMIZATION                               │
+├──────────────────────────────────────────────────────────┤
+│ Applying optimizations:                                  │
+│ • Constant folding  (arithmetic + comparisons, any depth)│
+│ • Copy propagation  (replace vars with values, pre-loop) │
+│ • Dead branch elim. (IF_FALSE <true const> → removed)    │
+│ • Dead loop  elim.  (IF_FALSE 0 → skip entire body)      │
+│ • Proper nesting    (loop depth counter, not bool flag)   │
+└──────────────────────────────────────────────────────────┘
+Optimized TAC Instructions:
+─────────────────────────────
+ 1: FUNC main          // Function definition
+ 2: DECL mode           // Declare variable
+ 3: DECL flag           // Declare variable
+ 4: mode = 2           // Assignment
+ 5: flag = 1           // Assignment
+ 6: t1 = 1           // Assignment
+ 7: t0 = 1           // Assignment
+ 8: GOTO L1                  // Unconditional jump
+L0:                          // Loop label
+ 9: t0 = 0           // Assignment
+L1:                          // Loop label
+10: IF_FALSE t0 GOTO L2     // Conditional jump
+11: DECL __sw7           // Declare variable
+12: __sw7 = mode           // Assignment
+13: t2 = mode == 1           // Equality
+14: IF_FALSE t2 GOTO L9     // Conditional jump
+15: GOTO L4                  // Unconditional jump
+L9:                          // Loop label
+16: t3 = __sw7 == 2           // Equality
+17: IF_FALSE t3 GOTO L7     // Conditional jump
+18: GOTO L5                  // Unconditional jump
+L7:                          // Loop label
+19: GOTO L6                  // Unconditional jump
+L4:                          // Loop label
+20: PRINT 901          // Output value
+21: GOTO L8                  // Unconditional jump
+L5:                          // Loop label
+22: IF_FALSE flag GOTO L10     // Conditional jump
+23: t4 = 1           // Assignment
+24: GOTO L12                  // Unconditional jump
+L10:                          // Loop label
+25: GOTO L11                  // Unconditional jump
+26: t4 = 1           // Assignment
+27: GOTO L12                  // Unconditional jump
+L11:                          // Loop label
+28: t4 = 0           // Assignment
+L12:                          // Loop label
+29: IF_FALSE t4 GOTO L13     // Conditional jump
+30: PRINT 500          // Output value
+31: GOTO L14                  // Unconditional jump
+L13:                          // Loop label
+32: PRINT 902          // Output value
+L14:                          // Loop label
+33: GOTO L8                  // Unconditional jump
+L6:                          // Loop label
+34: PRINT 903          // Output value
+35: GOTO L8                  // Unconditional jump
+L8:                          // Loop label
+36: GOTO L3                  // Unconditional jump
+L2:                          // Loop label
+37: PRINT 904          // Output value
+L3:                          // Loop label
+38: t5 = flag == 0           // Equality
+39: IF_FALSE t5 GOTO L15     // Conditional jump
+40: t6 = 1           // Assignment
+41: GOTO L17                  // Unconditional jump
+L15:                          // Loop label
+42: t7 = mode == 2           // Equality
+43: IF_FALSE t7 GOTO L16     // Conditional jump
+44: t6 = 1           // Assignment
+45: GOTO L17                  // Unconditional jump
+L16:                          // Loop label
+46: t6 = 0           // Assignment
+L17:                          // Loop label
+47: IF_FALSE t6 GOTO L18     // Conditional jump
+48: PRINT 600          // Output value
+49: GOTO L19                  // Unconditional jump
+L18:                          // Loop label
+50: PRINT 905          // Output value
+L19:                          // Loop label
+51: RETURN 0        // Return value
+
+
+=== Phase 4: Optimization Performance ===
+CPU Time: 0.000173 seconds
+Wall Time: 0.000173 seconds
+Memory Delta: 16.00 KB
+✓ Optimized TAC written to: tac.txt
+
+┌──────────────────────────────────────────────────────────┐
+│ PHASE 5: MIPS CODE GENERATION                            │
+├──────────────────────────────────────────────────────────┤
+│ Translating optimized TAC to MIPS assembly:              │
+│ • Variables stored on stack                              │
+│ • Using $t0-$t7 for temporary values                     │
+│ • System calls for print operations                      │
+└──────────────────────────────────────────────────────────┘
+ENTER FUNCTION: 'main' (scope activated)
+EXIT FUNCTION: 'main' (scope deactivated)
+ENTER FUNCTION: 'main' (scope activated)
+EXIT FUNCTION: 'main' (scope deactivated)
+
+=== Phase 5: MIPS Code Generation Performance ===
+CPU Time: 0.000106 seconds
+Wall Time: 0.000106 seconds
+Memory Delta: 0.00 KB
+✓ MIPS assembly code generated to: mips.s
+
+
+=== TOTAL COMPILATION TIME Performance ===
+CPU Time: 0.000952 seconds
+Wall Time: 0.000951 seconds
+Memory Delta: 264.00 KB
+
+╔════════════════════════════════════════════════════════════╗
+║                  COMPILATION SUCCESSFUL!                   ║
+║         Run the output file in a MIPS simulator            ║
+╚════════════════════════════════════════════════════════════╝
+
+Compiler exit code: 0
+
+=== SPIM OUTPUT ===
+Loaded: /usr/share/spim/exceptions.s
+500
+600
+
+=== VERIFICATION ===
+Expected: 500 600
+Actual:   500 600
+Result: PASS

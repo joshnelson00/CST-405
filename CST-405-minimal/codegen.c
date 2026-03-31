@@ -151,6 +151,9 @@ void collectFloatConsts(CodeGenContext* ctx, ASTNode* node) {
         case NODE_PRINT:
             collectFloatConsts(ctx, node->data.expr);
             break;
+        case NODE_WRITE:
+            collectFloatConsts(ctx, node->data.expr);
+            break;
         case NODE_RETURN:
             collectFloatConsts(ctx, node->data.return_stmt.expr);
             break;
@@ -478,6 +481,9 @@ void genStmt(CodeGenContext* ctx, ASTNode* node) {
                 fprintf(ctx->output, "    la $a0, str_%d\n", strId);
                 fprintf(ctx->output, "    li $v0, 4\n");
                 fprintf(ctx->output, "    syscall\n");
+                fprintf(ctx->output, "    li $v0, 11\n");
+                fprintf(ctx->output, "    li $a0, 10\n");
+                fprintf(ctx->output, "    syscall\n");
             } else {
                 ExprResult val = genExpr(ctx, node->data.expr);
 
@@ -497,6 +503,31 @@ void genStmt(CodeGenContext* ctx, ASTNode* node) {
                 fprintf(ctx->output, "    li $v0, 11\n");
                 fprintf(ctx->output, "    li $a0, 10\n");
                 fprintf(ctx->output, "    syscall\n");
+            }
+            break;
+        }
+
+        case NODE_WRITE: {
+            // Check if it's a string literal
+            if (node->data.expr && node->data.expr->type == NODE_STR) {
+                int strId = getStringConstID(ctx, node->data.expr->data.str);
+                fprintf(ctx->output, "    la $a0, str_%d\n", strId);
+                fprintf(ctx->output, "    li $v0, 4\n");
+                fprintf(ctx->output, "    syscall\n");
+            } else {
+                ExprResult val = genExpr(ctx, node->data.expr);
+
+                if (val.type == TYPE_FLOAT) {
+                    fprintf(ctx->output, "    mov.s $f12, $f%d\n", val.reg);
+                    fprintf(ctx->output, "    li $v0, 2\n");
+                    fprintf(ctx->output, "    syscall\n");
+                    releaseFloatReg(&ctx->regPool, val.reg);
+                } else {
+                    fprintf(ctx->output, "    move $a0, $t%d\n", val.reg);
+                    fprintf(ctx->output, "    li $v0, 1\n");
+                    fprintf(ctx->output, "    syscall\n");
+                    releaseTempReg(&ctx->regPool, val.reg);
+                }
             }
             break;
         }

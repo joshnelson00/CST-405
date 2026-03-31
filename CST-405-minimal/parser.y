@@ -95,11 +95,14 @@ static int isIntegralExpr(ASTNode* expr) {
         case NODE_STR:
             return 0;
         case NODE_VAR:
-            return getVarType(expr->data.var.name) == TYPE_INT;
+            return getVarType(expr->data.var.name) == TYPE_INT ||
+                   getVarType(expr->data.var.name) == TYPE_CHAR;
         case NODE_ARRAY_ACCESS:
-            return getVarType(expr->data.array_access.name) == TYPE_INT;
+            return getVarType(expr->data.array_access.name) == TYPE_INT ||
+                   getVarType(expr->data.array_access.name) == TYPE_CHAR;
         case NODE_FUNC_CALL:
-            return getFunctionReturnType(expr->data.func_call.name) == TYPE_INT;
+            return getFunctionReturnType(expr->data.func_call.name) == TYPE_INT ||
+                   getFunctionReturnType(expr->data.func_call.name) == TYPE_CHAR;
         case NODE_MEMBER_ACCESS:
             return 1;
         case NODE_ADDR_OF:
@@ -231,7 +234,10 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %token INT             /* Type keywords */
 %token FLOAT
 %token VOID
+%token BOOLEAN
+%token CHAR
 %token PRINT           /* Statement keywords */
+%token WRITE
 %token RETURN
 %token WHILE FOR       /* Loop keywords */
 %token IF ELSE         /* Conditional keywords */
@@ -241,7 +247,7 @@ extern int semantic_error_count; /* Counter for semantic errors (in symtab.c) */
 %token AND OR NOT
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program struct_defs_opt struct_def field_list field_decl func_list func param_list param stmt_list stmt stmt_list_opt decl assign expr print_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update if_stmt switch_stmt break_stmt case_clause_list_opt case_clause_list case_clause
+%type <node> program struct_defs_opt struct_def field_list field_decl func_list func param_list param stmt_list stmt stmt_list_opt decl assign expr print_stmt write_stmt return_stmt func_call arg_list while_stmt for_stmt for_init for_cond for_update if_stmt switch_stmt break_stmt case_clause_list_opt case_clause_list case_clause
 %type <num> case_value
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
@@ -381,6 +387,30 @@ func:
         addFunction($2, TYPE_VOID, $$);            /* Update with AST */
         free($2);
     }
+    | BOOLEAN ID '(' param_list ')' { prepareFunctionScope($2, TYPE_INT); addParamsToScope($4); } '{' stmt_list '}' {
+        exitFunction();
+        $$ = createFunc($2, TYPE_INT, $4, $8);
+        addFunction($2, TYPE_INT, $$);
+        free($2);
+    }
+    | BOOLEAN ID '(' ')' { prepareFunctionScope($2, TYPE_INT); } '{' stmt_list '}' {
+        exitFunction();
+        $$ = createFunc($2, TYPE_INT, NULL, $7);
+        addFunction($2, TYPE_INT, $$);
+        free($2);
+    }
+    | CHAR ID '(' param_list ')' { prepareFunctionScope($2, TYPE_CHAR); addParamsToScope($4); } '{' stmt_list '}' {
+        exitFunction();
+        $$ = createFunc($2, TYPE_CHAR, $4, $8);
+        addFunction($2, TYPE_CHAR, $$);
+        free($2);
+    }
+    | CHAR ID '(' ')' { prepareFunctionScope($2, TYPE_CHAR); } '{' stmt_list '}' {
+        exitFunction();
+        $$ = createFunc($2, TYPE_CHAR, NULL, $7);
+        addFunction($2, TYPE_CHAR, $$);
+        free($2);
+    }
     | INT '[' ']' ID '(' param_list ')' { prepareFunctionScope($4, TYPE_INT); addParamsToScope($6); } '{' stmt_list '}' { 
         exitFunction();
         $$ = createFunc($4, TYPE_INT, $6, $10);  /* Function returning int array with parameters */
@@ -430,6 +460,14 @@ param:
     }
     | FLOAT ID { 
         $$ = createParam($2, TYPE_FLOAT);  /* Float parameter */
+        free($2);
+    }
+    | BOOLEAN ID {
+        $$ = createParam($2, TYPE_INT);  /* boolean is int-backed */
+        free($2);
+    }
+    | CHAR ID {
+        $$ = createParam($2, TYPE_CHAR);
         free($2);
     }
     | INT ID '[' ']' {
@@ -484,6 +522,7 @@ stmt:
     decl        /* Variable declaration */
     | assign    /* Assignment statement */
     | print_stmt /* Print statement */
+    | write_stmt /* Write statement */
     | return_stmt /* Return statement */
     | while_stmt /* While loop statement */
     | for_stmt   /* For loop statement */
@@ -515,6 +554,18 @@ decl:
         $$ = createDecl($2, TYPE_FLOAT); 
         free($2);                       
         printSymTab();          
+    }
+    | BOOLEAN ID ';' {
+        addVar($2, TYPE_INT);
+        $$ = createDecl($2, TYPE_INT);
+        free($2);
+        printSymTab();
+    }
+    | CHAR ID ';' {
+        addVar($2, TYPE_CHAR);
+        $$ = createDecl($2, TYPE_CHAR);
+        free($2);
+        printSymTab();
     }
     | STRUCT ID ID ';' {
         StructType* st = lookupStruct($2);
@@ -654,7 +705,9 @@ assign:
                 fprintf(stderr, "   Cannot assign an address value to a non-pointer variable\n");
                 fprintf(stderr, "💡 Suggestion: assign pointer values only to 'struct T*' variables\n\n");
                 semantic_error_count++;
-            } else if (lhs != rhs && rhs != TYPE_VOID) {
+                        } else if (lhs != rhs && rhs != TYPE_VOID &&
+                                             !((lhs == TYPE_CHAR && rhs == TYPE_INT) ||
+                                                 (lhs == TYPE_INT && rhs == TYPE_CHAR))) {
                 fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
                 fprintf(stderr, "   Type mismatch in assignment to '%s'\n", $1);
                 fprintf(stderr, "💡 Suggestion: assign a value with matching scalar type\n\n");
@@ -706,7 +759,9 @@ assign:
         if (isVarDeclared($1) && !isArrayVar($1)) {
             VarType lhs = getVarType($1);
             VarType rhs = inferExprType($6);
-            if (lhs != rhs && rhs != TYPE_VOID) {
+            if (lhs != rhs && rhs != TYPE_VOID &&
+                !((lhs == TYPE_CHAR && rhs == TYPE_INT) ||
+                  (lhs == TYPE_INT && rhs == TYPE_CHAR))) {
                 fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
                 fprintf(stderr, "   Type mismatch in array assignment for '%s[index]'\n", $1);
                 fprintf(stderr, "💡 Suggestion: assign a value with matching element type\n\n");
@@ -942,6 +997,13 @@ expr:
 print_stmt:
     PRINT '(' expr ')' ';' { 
         $$ = createPrint($3);  
+    }
+    ;
+
+/* WRITE STATEMENT (no trailing newline) */
+write_stmt:
+    WRITE '(' expr ')' ';' {
+        $$ = createWrite($3);
     }
     ;
 

@@ -1,0 +1,35 @@
+int main() {
+    int mode;
+    int flag;
+
+    mode = 2;
+    flag = 1;
+
+    if (flag && (mode >= 2)) {
+        switch (mode) {
+            case 1:
+                print(901);
+                break;
+            case 2:
+                if (flag || 0) {
+                    print(500);
+                } else {
+                    print(902);
+                }
+                break;
+            default:
+                print(903);
+                break;
+        }
+    } else {
+        print(904);
+    }
+
+    if (!flag || (mode == 2)) {
+        print(600);
+    } else {
+        print(905);
+    }
+
+    return 0;
+}

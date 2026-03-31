@@ -33,6 +33,7 @@ typedef struct StructType {
 /* VARIABLE TYPES */
 typedef enum {
     TYPE_INT,
+    TYPE_CHAR,
     TYPE_FLOAT,
     TYPE_VOID,
     TYPE_STRUCT,

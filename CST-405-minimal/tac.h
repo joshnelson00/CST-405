@@ -22,6 +22,7 @@ typedef enum {
     TAC_MEMBER_STORE,/* Struct member write: arg1.(offset arg2) = result */
     TAC_ADDR_OF,     /* Address-of: result = &arg1 */
     TAC_PRINT,       /* Print: print(arg1) */
+    TAC_WRITE,       /* Write: write(arg1) (no newline) */
     TAC_DECL,        /* Declaration: declare result */
     TAC_ARRAY_DECL,  /* Array declaration: declare result[size] */
     TAC_FUNC_DEF,    /* Function definition: func name */

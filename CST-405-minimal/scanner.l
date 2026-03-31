@@ -25,21 +25,38 @@ int yycolumn = 1;
 "int"           { yycolumn += yyleng; return INT; }
 "float"         { yycolumn += yyleng; return FLOAT; }
 "void"          { yycolumn += yyleng; return VOID; }
+"boolean"       { yycolumn += yyleng; return BOOLEAN; }
+"char"          { yycolumn += yyleng; return CHAR; }
 "print"         { yycolumn += yyleng; return PRINT; }
+"write"         { yycolumn += yyleng; return WRITE; }
 "return"        { yycolumn += yyleng; return RETURN; }
 "while"         { yycolumn += yyleng; return WHILE; }
 "for"           { yycolumn += yyleng; return FOR; }
 "if"            { yycolumn += yyleng; return IF; }
 "else"          { yycolumn += yyleng; return ELSE; }
+"true"          { yylval.num = 1; yycolumn += yyleng; return NUM; }
+"false"         { yylval.num = 0; yycolumn += yyleng; return NUM; }
 "switch"        { yycolumn += yyleng; return SWITCH; }
 "case"          { yycolumn += yyleng; return CASE; }
 "default"       { yycolumn += yyleng; return DEFAULT; }
 "break"         { yycolumn += yyleng; return BREAK; }
 "struct"        { yycolumn += yyleng; return STRUCT; }
 
+\'[^\'\n]\' {
+    yylval.num = (unsigned char)yytext[1];
+    yycolumn += yyleng;
+    return NUM;
+}
+
 \"[^\"]*\" {
-    /* String literal with escape sequences */
-    yylval.str = strdup(yytext);
+    /* Store string contents without surrounding quotes */
+    int n = yyleng - 2;
+    yylval.str = malloc((size_t)n + 1);
+    strncpy(yylval.str, yytext + 1, (size_t)n);
+    yylval.str[n] = '\0';
+    while (n > 0 && (yylval.str[n - 1] == '\n' || yylval.str[n - 1] == '\r')) {
+        yylval.str[--n] = '\0';
+    }
     yycolumn += yyleng;
     return STRING;
 }

@@ -107,9 +107,24 @@ char* generateTACExpr(ASTNode* node) {
             return temp;
         }
         case NODE_STR: {
-            /* Return string literal as-is with quotes for TAC */
-            char* temp = malloc(strlen(node->data.str) + 3);
-            sprintf(temp, "\"%s\"", node->data.str);
+            /* Escape content so TAC/MIPS string literals remain one-line and valid. */
+            const char* s = node->data.str ? node->data.str : "";
+            size_t in_len = strlen(s);
+            char* temp = malloc(in_len * 2 + 3);
+            size_t j = 0;
+            temp[j++] = '"';
+            for (size_t i = 0; i < in_len; i++) {
+                switch (s[i]) {
+                    case '\\': temp[j++] = '\\'; temp[j++] = '\\'; break;
+                    case '"':  temp[j++] = '\\'; temp[j++] = '"';  break;
+                    case '\n': temp[j++] = '\\'; temp[j++] = 'n';  break;
+                    case '\t': temp[j++] = '\\'; temp[j++] = 't';  break;
+                    case '\r': temp[j++] = '\\'; temp[j++] = 'r';  break;
+                    default:   temp[j++] = s[i]; break;
+                }
+            }
+            temp[j++] = '"';
+            temp[j] = '\0';
             return temp;
         }
         case NODE_VAR:
@@ -281,6 +296,12 @@ void generateTAC(ASTNode* node) {
         case NODE_PRINT: {
             char* expr = generateTACExpr(node->data.expr);
             appendTAC(createTAC(TAC_PRINT, expr, NULL, NULL));
+            break;
+        }
+
+        case NODE_WRITE: {
+            char* expr = generateTACExpr(node->data.expr);
+            appendTAC(createTAC(TAC_WRITE, expr, NULL, NULL));
             break;
         }
 
@@ -632,6 +653,9 @@ void printTACToFile(const char* filename) {
             case TAC_PRINT:
                 fprintf(file, " %d: PRINT sum          // Output value of sum\n", instrNum++);
                 break;
+            case TAC_WRITE:
+                fprintf(file, " %d: WRITE sum          // Output value without newline\n", instrNum++);
+                break;
             case TAC_DECL:
                 fprintf(file, " %d: DECL result          // Declare variable 'result'\n", instrNum++);
                 break;
@@ -730,6 +754,7 @@ void printTAC() {
             case TAC_DIVIDE: printf("%s = %s / %s\n", curr->result, curr->arg1, curr->arg2); break;
             case TAC_ASSIGN: printf("%s = %s\n", curr->result, curr->arg1); break;
             case TAC_PRINT: printf("PRINT %s\n", curr->arg1); break;
+            case TAC_WRITE: printf("WRITE %s\n", curr->arg1); break;
             case TAC_FUNC_DEF: printf("FUNC %s\n", curr->arg1); break;
             case TAC_FUNC_CALL: printf("%s = CALL %s\n", curr->result, curr->arg1); break;
             case TAC_PARAM: printf("PARAM %s\n", curr->arg1); break;

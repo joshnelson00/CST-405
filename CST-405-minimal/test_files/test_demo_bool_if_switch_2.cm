@@ -1,0 +1,40 @@
+int main() {
+    int x;
+    int y;
+
+    x = 2;
+    y = 3;
+
+    if (x < y) {
+        if ((x + y) == 5 && !(x == 0)) {
+            print(100);
+        } else {
+            print(900);
+        }
+    } else {
+        print(901);
+    }
+
+    if ((x > y) || (y == 3)) {
+        print(200);
+    } else {
+        print(902);
+    }
+
+    switch (y) {
+        case 1:
+            print(903);
+            break;
+        case 2:
+            print(904);
+            break;
+        case 3:
+            print(300);
+            break;
+        default:
+            print(905);
+            break;
+    }
+
+    return 0;
+}

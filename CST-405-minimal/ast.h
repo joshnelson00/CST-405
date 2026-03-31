@@ -31,6 +31,7 @@ typedef enum {
     NODE_ASSIGN,    /* Assignment statement (e.g., x = 10) */
     NODE_ARRAY_ASSIGN, /* Array assignment (e.g., arr[i] = 10) */
     NODE_PRINT,     /* Print statement (e.g., print(x)) */
+    NODE_WRITE,     /* Write statement (e.g., write(x)) */
     NODE_RETURN,    /* Return statement (e.g., return x) */
     NODE_FUNC,      /* Function definition (e.g., int f() {}) */
     NODE_PARAM,     /* Function parameter (e.g., int x) */
@@ -247,6 +248,7 @@ ASTNode* createArrayAccess(char* name, ASTNode* index);         /* Create array 
 ASTNode* createArrayAssign(char* name, ASTNode* index, ASTNode* value); /* Create array assignment node */
 ASTNode* createAssign(char* var, ASTNode* value);               /* Create assignment node */
 ASTNode* createPrint(ASTNode* expr);                            /* Create print node */
+ASTNode* createWrite(ASTNode* expr);                            /* Create write node */
 ASTNode* createReturn(ASTNode* expr);                           /* Create return node */
 ASTNode* createFunc(char* name, VarType return_type, ASTNode* params, ASTNode* body);  /* Create function node */
 ASTNode* createParam(char* name, VarType type);                  /* Create parameter node */
