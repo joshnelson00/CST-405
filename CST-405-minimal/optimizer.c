@@ -12,6 +12,9 @@ extern TACList tacList;
 TACList optimizedList;
 extern GlobalSymbolTable globalSymTab;
 
+static int g_constFoldCount = 0;
+static int g_deadCodeElimCount = 0;
+
 // External function declaration for isConst from tac.c
 extern int isConst(const char* s);
 
@@ -130,6 +133,8 @@ static const char* propLookup(const char* name,
  *                              so optimizations are scoped correctly
  * ========================================================= */
 void optimizeTAC2() {
+    g_constFoldCount = 0;
+    g_deadCodeElimCount = 0;
 
     /* ── STEP 1: Pre-scan to collect BACKWARD-jump loop-start labels ──────────
      * FIX for the merge-point register problem:
@@ -236,6 +241,7 @@ void optimizeTAC2() {
             char foldBuf[32];
             if (tryFoldBinop(curr->op, left, right, foldBuf, sizeof(foldBuf))) {
                 char* foldedVal = strdup(foldBuf);
+                g_constFoldCount++;
                 /* Record in prop-table so downstream code can use it */
                 if (loopDepth == 0 && propCount < 256) {
                     propTable[propCount].var   = strdup(curr->result);
@@ -295,6 +301,7 @@ void optimizeTAC2() {
                         "\n⚡ Optimizer [dead-branch]: IF_FALSE %s GOTO %s"
                         " → removed (branch never taken)\n\n",
                         cond, curr->result);
+                    g_deadCodeElimCount++;
                     newInstr = NULL;   /* skip IF_FALSE instruction */
                 } else {
                     /* ────────────────────────────────────────────────
@@ -314,6 +321,7 @@ void optimizeTAC2() {
                             " — skipping loop body (target: %s)\n\n", endLabel);
 
                         TACInstr* skip = curr->next;
+                                                int removed = 0;
                         while (skip &&
                                !(skip->op == TAC_LABEL && skip->arg1 &&
                                  strcmp(skip->arg1, endLabel) == 0)) {
@@ -323,8 +331,10 @@ void optimizeTAC2() {
                             if (skip->op == TAC_GOTO && skip->arg1 &&
                                 isLoopStartLabel(skip->arg1, loopStarts, nLoopStarts))
                                 if (loopDepth > 0) loopDepth--;
+                            removed++;
                             skip = skip->next;
                         }
+                        g_deadCodeElimCount += (1 + removed); /* IF_FALSE + skipped loop body */
                         /* skip == endLabel node (or NULL); advance past it */
                         nextCurr = skip ? skip->next : NULL;
                         newInstr  = NULL;
@@ -1159,6 +1169,24 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
     }
 
     fclose(out);
+}
+
+void generateMIPSFromUnoptimizedTAC2(const char* filename) {
+    TACInstr* savedHead = optimizedList.head;
+    TACInstr* savedTail = optimizedList.tail;
+    optimizedList.head = tacList.head;
+    optimizedList.tail = tacList.tail;
+    generateMIPSFromOptimizedTAC2(filename);
+    optimizedList.head = savedHead;
+    optimizedList.tail = savedTail;
+}
+
+int getOptimizerConstFoldCount(void) {
+    return g_constFoldCount;
+}
+
+int getOptimizerDeadCodeElimCount(void) {
+    return g_deadCodeElimCount;
 }
 
 // Print optimized TAC instructions

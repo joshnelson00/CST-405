@@ -1,3 +1,0 @@
-1. Chars/Strings
-2. Type coercion
-3. Document extensively that optimization is not conditional in our compilers
