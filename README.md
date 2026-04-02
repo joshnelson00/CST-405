@@ -1,6 +1,8 @@
 
 ## Team Members
 
+#### The Compiler Project is in the CST-405-Minimal Directory
+
 ### Josh Nelson
 **Major:** Computer Science (Emphasis in Big Data Analytics)  
 **Year:** Junior (Expected Graduation: April 2027)  
