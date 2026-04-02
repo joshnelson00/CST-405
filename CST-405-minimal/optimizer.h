@@ -6,8 +6,11 @@
 #include <stdio.h>
 void optimizeTAC2();
 void generateMIPSFromOptimizedTAC2(const char* filename);
+void generateMIPSFromUnoptimizedTAC2(const char* filename);
 void printOptimizedTAC2();
 void printOptimizedTACToFile2(const char* filename);
 void printTACToFile2(const char* filename);
+int getOptimizerConstFoldCount(void);
+int getOptimizerDeadCodeElimCount(void);
 
 #endif

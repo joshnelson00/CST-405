@@ -140,7 +140,7 @@ int addVar(char* name, VarType type) {
 
     printf("SYMBOL TABLE: Added '%s' (%s) at offset %d [hash=%u]\n", 
            name,
-           type == TYPE_FLOAT ? "float" : type == TYPE_VOID ? "void" : "int",
+           type == TYPE_FLOAT ? "float" : type == TYPE_CHAR ? "char" : type == TYPE_VOID ? "void" : "int",
            entry->offset, h);
 
     return entry->offset;
@@ -197,7 +197,7 @@ int addArray(char* name, VarType type, int size) {
 
     printf("SYMBOL TABLE: Added array '%s[%d]' (%s) at offset %d [hash=%u]\n", 
            name, size,
-           type == TYPE_FLOAT ? "float" : type == TYPE_VOID ? "void" : "int",
+           type == TYPE_FLOAT ? "float" : type == TYPE_CHAR ? "char" : type == TYPE_VOID ? "void" : "int",
            entry->offset, h);
 
     return entry->offset;
@@ -454,23 +454,11 @@ int validateFunctionCall(char* func_name, int arg_count) {
             return 1;  // Validation passed
         }
     }
-    /* Function not found - check for similar names */
-    fprintf(stderr, "\n❌ Semantic Error at line %d:\n", yyline);
-    fprintf(stderr, "   Function '%s' is not declared\n", func_name);
-    fprintf(stderr, "💡 Suggestions:\n");
-    fprintf(stderr, "   • Check for typos in the function name\n");
-    fprintf(stderr, "   • Make sure the function is defined before it is called\n");
-    if (globalSymTab.func_count > 0) {
-        fprintf(stderr, "   • Available functions: ");
-        for (int i = 0; i < globalSymTab.func_count; i++) {
-            fprintf(stderr, "%s%s", globalSymTab.funcs[i].name,
-                    i < globalSymTab.func_count - 1 ? ", " : "");
-        }
-        fprintf(stderr, "\n");
-    }
-    fprintf(stderr, "\n");
-    semantic_error_count++;
-    return 0;
+    /*
+     * Single-pass parser support: allow unresolved calls here so later
+     * function definitions can satisfy them.
+     */
+    return 1;
 }
 
 /* Get function return type */
@@ -500,6 +488,7 @@ void printSymTab() {
             printf("  %s (%s) -> offset %d\n",
                    currentSymTab->vars[i].name,
                    currentSymTab->vars[i].type == TYPE_FLOAT ? "float" :
+                   currentSymTab->vars[i].type == TYPE_CHAR ? "char" :
                    currentSymTab->vars[i].type == TYPE_VOID ? "void" : "int",
                    currentSymTab->vars[i].offset);
         }

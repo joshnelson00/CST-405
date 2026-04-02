@@ -12,6 +12,9 @@ extern TACList tacList;
 TACList optimizedList;
 extern GlobalSymbolTable globalSymTab;
 
+static int g_constFoldCount = 0;
+static int g_deadCodeElimCount = 0;
+
 // External function declaration for isConst from tac.c
 extern int isConst(const char* s);
 
@@ -70,14 +73,17 @@ static int tryFoldBinop(TACOp op,
                         char* resultBuf, size_t bufSize) {
     if (!isConst(left) || !isConst(right)) return 0;
     double l = atof(left), r = atof(right);
+    int isFloat = (strchr(left, '.') || strchr(left, 'e') || strchr(left, 'E') ||
+                   strchr(right, '.') || strchr(right, 'e') || strchr(right, 'E'));
     double res = 0;
     switch (op) {
         case TAC_ADD:      res = l + r;                      break;
         case TAC_SUBTRACT: res = l - r;                      break;
         case TAC_MULTIPLY: res = l * r;                      break;
         case TAC_DIVIDE:
-            if ((int)r == 0) return 0;   /* never fold div-by-zero */
-            res = (int)l / (int)r;       break;
+            if (r == 0.0) return 0;      /* never fold div-by-zero */
+            res = isFloat ? (l / r) : ((int)l / (int)r);
+            break;
         case TAC_EQ:  res = (l == r) ? 1 : 0;               break;
         case TAC_NE:  res = (l != r) ? 1 : 0;               break;
         case TAC_LT:  res = (l <  r) ? 1 : 0;               break;
@@ -86,7 +92,15 @@ static int tryFoldBinop(TACOp op,
         case TAC_GE:  res = (l >= r) ? 1 : 0;               break;
         default: return 0;
     }
-    snprintf(resultBuf, bufSize, "%d", (int)res);
+    if (op == TAC_ADD || op == TAC_SUBTRACT || op == TAC_MULTIPLY || op == TAC_DIVIDE) {
+        if (isFloat) {
+            snprintf(resultBuf, bufSize, "%.6f", res);
+        } else {
+            snprintf(resultBuf, bufSize, "%d", (int)res);
+        }
+    } else {
+        snprintf(resultBuf, bufSize, "%d", (int)res);
+    }
     return 1;
 }
 
@@ -119,6 +133,8 @@ static const char* propLookup(const char* name,
  *                              so optimizations are scoped correctly
  * ========================================================= */
 void optimizeTAC2() {
+    g_constFoldCount = 0;
+    g_deadCodeElimCount = 0;
 
     /* ── STEP 1: Pre-scan to collect BACKWARD-jump loop-start labels ──────────
      * FIX for the merge-point register problem:
@@ -225,6 +241,7 @@ void optimizeTAC2() {
             char foldBuf[32];
             if (tryFoldBinop(curr->op, left, right, foldBuf, sizeof(foldBuf))) {
                 char* foldedVal = strdup(foldBuf);
+                g_constFoldCount++;
                 /* Record in prop-table so downstream code can use it */
                 if (loopDepth == 0 && propCount < 256) {
                     propTable[propCount].var   = strdup(curr->result);
@@ -255,12 +272,11 @@ void optimizeTAC2() {
             break;
         }
 
-        /* ── Print ── */
-        case TAC_PRINT: {
-            const char* value = curr->arg1;
-            if (loopDepth == 0)
-                value = propLookup(value, propTable, propCount);
-            newInstr = createTAC(TAC_PRINT, (char*)value, NULL, NULL);
+        /* ── Print / Write ── */
+        case TAC_PRINT:
+        case TAC_WRITE: {
+            /* Keep output operands intact so backend can choose syscall by type. */
+            newInstr = createTAC(curr->op, curr->arg1, NULL, NULL);
             break;
         }
 
@@ -285,6 +301,7 @@ void optimizeTAC2() {
                         "\n⚡ Optimizer [dead-branch]: IF_FALSE %s GOTO %s"
                         " → removed (branch never taken)\n\n",
                         cond, curr->result);
+                    g_deadCodeElimCount++;
                     newInstr = NULL;   /* skip IF_FALSE instruction */
                 } else {
                     /* ────────────────────────────────────────────────
@@ -304,6 +321,7 @@ void optimizeTAC2() {
                             " — skipping loop body (target: %s)\n\n", endLabel);
 
                         TACInstr* skip = curr->next;
+                                                int removed = 0;
                         while (skip &&
                                !(skip->op == TAC_LABEL && skip->arg1 &&
                                  strcmp(skip->arg1, endLabel) == 0)) {
@@ -313,8 +331,10 @@ void optimizeTAC2() {
                             if (skip->op == TAC_GOTO && skip->arg1 &&
                                 isLoopStartLabel(skip->arg1, loopStarts, nLoopStarts))
                                 if (loopDepth > 0) loopDepth--;
+                            removed++;
                             skip = skip->next;
                         }
+                        g_deadCodeElimCount += (1 + removed); /* IF_FALSE + skipped loop body */
                         /* skip == endLabel node (or NULL); advance past it */
                         nextCurr = skip ? skip->next : NULL;
                         newInstr  = NULL;
@@ -389,6 +409,7 @@ typedef struct {
     int  isParam;       // 1 if function parameter (could be a pointer if used as array)
     int  isLocalStruct; // 1 if local struct variable
     int  isStructPtr;   // 1 if variable contains struct pointer value
+    VarType type;       // scalar type used for codegen decisions
 } MIPSGenVar;
 
 static MIPSGenVar mgVars[100];
@@ -396,10 +417,15 @@ static int mgVarCount;
 static int mgNextOffset;
 static int mgTempBase;   // temps start here on the stack
 static int mgFrameSize;
+static VarType mgTempTypes[1024];
 
-static void mgReset(void) { mgVarCount = 0; mgNextOffset = 0; }
+static void mgReset(void) {
+    mgVarCount = 0;
+    mgNextOffset = 0;
+    for (int i = 0; i < 1024; i++) mgTempTypes[i] = TYPE_INT;
+}
 
-static int mgAddVar(const char* name, int size, int isArr, int isPar, int isStruct, int isStructPtr) {
+static int mgAddVar(const char* name, int size, int isArr, int isPar, int isStruct, int isStructPtr, VarType type) {
     int off = mgNextOffset;
     strncpy(mgVars[mgVarCount].name, name, 63);
     mgVars[mgVarCount].name[63] = '\0';
@@ -408,6 +434,7 @@ static int mgAddVar(const char* name, int size, int isArr, int isPar, int isStru
     mgVars[mgVarCount].isParam = isPar;
     mgVars[mgVarCount].isLocalStruct = isStruct;
     mgVars[mgVarCount].isStructPtr = isStructPtr;
+    mgVars[mgVarCount].type = type;
     mgVarCount++;
     mgNextOffset += size;
     return off;
@@ -434,6 +461,53 @@ static int mgIsConst(const char* s) {
     return *end == '\0';
 }
 static int mgConstInt(const char* s) { return (int)atof(s); }
+static int mgIsFloatConst(const char* s) {
+    if (!mgIsConst(s)) return 0;
+    return strchr(s, '.') != NULL || strchr(s, 'e') != NULL || strchr(s, 'E') != NULL;
+}
+
+static VarType mgOperandType(const char* op) {
+    if (!op) return TYPE_INT;
+    if (mgIsTemp(op)) {
+        int t = mgTempNum(op);
+        if (t >= 0 && t < 1024) return mgTempTypes[t];
+        return TYPE_INT;
+    }
+    if (mgIsConst(op)) {
+        return mgIsFloatConst(op) ? TYPE_FLOAT : TYPE_INT;
+    }
+    int idx = mgFind(op);
+    if (idx >= 0) return mgVars[idx].type;
+    return TYPE_INT;
+}
+
+static int mgDefinesResult(TACOp op) {
+    return op == TAC_ASSIGN || op == TAC_ADD || op == TAC_SUBTRACT ||
+           op == TAC_MULTIPLY || op == TAC_DIVIDE || op == TAC_EQ ||
+           op == TAC_NE || op == TAC_LT || op == TAC_GT || op == TAC_LE ||
+           op == TAC_GE || op == TAC_FUNC_CALL || op == TAC_ARRAY_READ ||
+           op == TAC_MEMBER_LOAD || op == TAC_ADDR_OF;
+}
+
+static int mgWillUseTempAsFloat(TACInstr* start, const char* temp) {
+    if (!temp || !mgIsTemp(temp)) return 0;
+    for (TACInstr* it = start; it; it = it->next) {
+        if (mgDefinesResult(it->op) && it->result && strcmp(it->result, temp) == 0) {
+            break;
+        }
+
+        if ((it->op == TAC_ADD || it->op == TAC_SUBTRACT || it->op == TAC_MULTIPLY || it->op == TAC_DIVIDE) &&
+            ((it->arg1 && strcmp(it->arg1, temp) == 0) || (it->arg2 && strcmp(it->arg2, temp) == 0))) {
+            const char* other = (it->arg1 && strcmp(it->arg1, temp) == 0) ? it->arg2 : it->arg1;
+            if (mgOperandType(other) == TYPE_FLOAT) return 1;
+        }
+
+        if (it->op == TAC_ASSIGN && it->arg1 && strcmp(it->arg1, temp) == 0) {
+            if (mgOperandType(it->result) == TYPE_FLOAT) return 1;
+        }
+    }
+    return 0;
+}
 
 // Emit: load a TAC operand into a MIPS register
 static void mgLoad(FILE* f, const char* op, const char* reg) {
@@ -447,6 +521,36 @@ static void mgLoad(FILE* f, const char* op, const char* reg) {
     }
 }
 
+static void mgLoadFloat(FILE* f, const char* op, const char* freg) {
+    if (mgIsTemp(op)) {
+        int t = mgTempNum(op);
+        if (t >= 0 && t < 1024 && mgTempTypes[t] == TYPE_FLOAT) {
+            fprintf(f, "    l.s %s, %d($fp)\n", freg, mgTempBase + t * 4);
+        } else {
+            fprintf(f, "    lw $t9, %d($fp)\n", mgTempBase + t * 4);
+            fprintf(f, "    mtc1 $t9, %s\n", freg);
+            fprintf(f, "    cvt.s.w %s, %s\n", freg, freg);
+        }
+    } else if (mgIsConst(op)) {
+        if (mgIsFloatConst(op)) {
+            fprintf(f, "    li.s %s, %s\n", freg, op);
+        } else {
+            fprintf(f, "    li $t9, %d\n", mgConstInt(op));
+            fprintf(f, "    mtc1 $t9, %s\n", freg);
+            fprintf(f, "    cvt.s.w %s, %s\n", freg, freg);
+        }
+    } else {
+        int idx = mgFind(op);
+        if (idx >= 0 && mgVars[idx].type == TYPE_FLOAT) {
+            fprintf(f, "    l.s %s, %d($fp)\n", freg, mgVars[idx].offset);
+        } else if (idx >= 0) {
+            fprintf(f, "    lw $t9, %d($fp)\n", mgVars[idx].offset);
+            fprintf(f, "    mtc1 $t9, %s\n", freg);
+            fprintf(f, "    cvt.s.w %s, %s\n", freg, freg);
+        }
+    }
+}
+
 // Emit: store a MIPS register to a TAC destination
 static void mgStore(FILE* f, const char* dst, const char* reg) {
     if (mgIsTemp(dst)) {
@@ -454,6 +558,23 @@ static void mgStore(FILE* f, const char* dst, const char* reg) {
     } else {
         int idx = mgFind(dst);
         if (idx >= 0) fprintf(f, "    sw %s, %d($fp)\n", reg, mgVars[idx].offset);
+    }
+}
+
+static void mgStoreFloat(FILE* f, const char* dst, const char* freg) {
+    if (mgIsTemp(dst)) {
+        int t = mgTempNum(dst);
+        fprintf(f, "    s.s %s, %d($fp)\n", freg, mgTempBase + t * 4);
+        if (t >= 0 && t < 1024) mgTempTypes[t] = TYPE_FLOAT;
+    } else {
+        int idx = mgFind(dst);
+        if (idx >= 0 && mgVars[idx].type == TYPE_FLOAT) {
+            fprintf(f, "    s.s %s, %d($fp)\n", freg, mgVars[idx].offset);
+        } else if (idx >= 0) {
+            fprintf(f, "    trunc.w.s %s, %s\n", freg, freg);
+            fprintf(f, "    mfc1 $t9, %s\n", freg);
+            fprintf(f, "    sw $t9, %d($fp)\n", mgVars[idx].offset);
+        }
     }
 }
 
@@ -472,7 +593,7 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
     StringLit strings[100];  // Max 100 string literals
     
     while (scan) {
-        if (scan->op == TAC_PRINT && scan->arg1 && scan->arg1[0] == '"') {
+        if ((scan->op == TAC_PRINT || scan->op == TAC_WRITE) && scan->arg1 && scan->arg1[0] == '"') {
             // Check if string already exists
             int found = -1;
             for (int i = 0; i < stringCount; i++) {
@@ -494,8 +615,15 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
     fprintf(out, ".data\n");
     for (int i = 0; i < stringCount; i++) {
         fprintf(out, "str_%d: .asciiz ", strings[i].id);
-        // Output string, processing escape sequences
-        fprintf(out, "%s\n", strings[i].value);  // TAC already has quotes
+        // Normalize string literals to avoid double newlines when we also print '\n' via syscall 11.
+        char buf[1024];
+        snprintf(buf, sizeof(buf), "%s", strings[i].value ? strings[i].value : "\"\"");
+        size_t len = strlen(buf);
+        if (len >= 3 && strcmp(buf + len - 3, "\\n\"") == 0) {
+            buf[len - 3] = '"';
+            buf[len - 2] = '\0';
+        }
+        fprintf(out, "%s\n", buf);
     }
     fprintf(out, "\n.text\n");
     fprintf(out, ".globl main\n\n");
@@ -555,16 +683,17 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             while (scan && scan->op != TAC_FUNC_DEF) {
                 if (scan->op == TAC_PARAM) {
                     VarType pt = getVarType(scan->arg1);
-                    mgAddVar(scan->arg1, 4, 0, 1, 0, pt == TYPE_STRUCT_PTR);
+                    mgAddVar(scan->arg1, 4, 0, 1, 0, pt == TYPE_STRUCT_PTR, pt);
                 }
                 scan = scan->next;
             }
             scan = curr->next;
             while (scan && scan->op != TAC_FUNC_DEF) {
                 if (scan->op == TAC_ARRAY_DECL) {
+                    VarType at = getVarType(scan->arg1);
                     for (int i = 0; i < arrCount; i++)
                         if (strcmp(arrNames[i], scan->arg1) == 0) {
-                            mgAddVar(scan->arg1, arrSizes[i] * 4, 1, 0, 0, 0);
+                            mgAddVar(scan->arg1, arrSizes[i] * 4, 1, 0, 0, 0, at);
                             break;
                         }
                 }
@@ -576,11 +705,11 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
                     VarType vt = getVarType(scan->result);
                     StructType* st = getVarStructType(scan->result);
                     if (vt == TYPE_STRUCT && st) {
-                        mgAddVar(scan->result, st->totalSize, 0, 0, 1, 0);
+                        mgAddVar(scan->result, st->totalSize, 0, 0, 1, 0, vt);
                     } else if (vt == TYPE_STRUCT_PTR) {
-                        mgAddVar(scan->result, 4, 0, 0, 0, 1);
+                        mgAddVar(scan->result, 4, 0, 0, 0, 1, vt);
                     } else {
-                        mgAddVar(scan->result, 4, 0, 0, 0, 0);
+                        mgAddVar(scan->result, 4, 0, 0, 0, 0, vt);
                     }
                 }
                 scan = scan->next;
@@ -620,65 +749,134 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             break; // handled during pre-scan or skipped
 
         case TAC_ASSIGN:
-            mgLoad(out, curr->arg1, "$t0");
-            mgStore(out, curr->result, "$t0");
+            if (mgOperandType(curr->result) == TYPE_FLOAT || mgOperandType(curr->arg1) == TYPE_FLOAT) {
+                mgLoadFloat(out, curr->arg1, "$f0");
+                if (mgOperandType(curr->result) == TYPE_FLOAT) {
+                    mgStoreFloat(out, curr->result, "$f0");
+                } else {
+                    fprintf(out, "    trunc.w.s $f0, $f0\n");
+                    fprintf(out, "    mfc1 $t0, $f0\n");
+                    mgStore(out, curr->result, "$t0");
+                }
+            } else {
+                mgLoad(out, curr->arg1, "$t0");
+                mgStore(out, curr->result, "$t0");
+            }
             break;
 
         case TAC_ADD:
-            mgLoad(out, curr->arg1, "$t0");
-            mgLoad(out, curr->arg2, "$t1");
-            fprintf(out, "    add $t2, $t0, $t1\n");
-            mgStore(out, curr->result, "$t2");
+            if (mgOperandType(curr->arg1) == TYPE_FLOAT || mgOperandType(curr->arg2) == TYPE_FLOAT) {
+                mgLoadFloat(out, curr->arg1, "$f0");
+                mgLoadFloat(out, curr->arg2, "$f1");
+                fprintf(out, "    add.s $f2, $f0, $f1\n");
+                mgStoreFloat(out, curr->result, "$f2");
+            } else {
+                mgLoad(out, curr->arg1, "$t0");
+                mgLoad(out, curr->arg2, "$t1");
+                fprintf(out, "    add $t2, $t0, $t1\n");
+                mgStore(out, curr->result, "$t2");
+            }
             break;
 
         case TAC_SUBTRACT:
-            mgLoad(out, curr->arg1, "$t0");
-            mgLoad(out, curr->arg2, "$t1");
-            fprintf(out, "    sub $t2, $t0, $t1\n");
-            mgStore(out, curr->result, "$t2");
+            if (mgOperandType(curr->arg1) == TYPE_FLOAT || mgOperandType(curr->arg2) == TYPE_FLOAT) {
+                mgLoadFloat(out, curr->arg1, "$f0");
+                mgLoadFloat(out, curr->arg2, "$f1");
+                fprintf(out, "    sub.s $f2, $f0, $f1\n");
+                mgStoreFloat(out, curr->result, "$f2");
+            } else {
+                mgLoad(out, curr->arg1, "$t0");
+                mgLoad(out, curr->arg2, "$t1");
+                fprintf(out, "    sub $t2, $t0, $t1\n");
+                mgStore(out, curr->result, "$t2");
+            }
             break;
 
         case TAC_MULTIPLY:
-            mgLoad(out, curr->arg1, "$t0");
-            mgLoad(out, curr->arg2, "$t1");
-            fprintf(out, "    mult $t0, $t1\n");
-            fprintf(out, "    mflo $t2\n");
-            mgStore(out, curr->result, "$t2");
+            if (mgOperandType(curr->arg1) == TYPE_FLOAT || mgOperandType(curr->arg2) == TYPE_FLOAT) {
+                mgLoadFloat(out, curr->arg1, "$f0");
+                mgLoadFloat(out, curr->arg2, "$f1");
+                fprintf(out, "    mul.s $f2, $f0, $f1\n");
+                mgStoreFloat(out, curr->result, "$f2");
+            } else {
+                mgLoad(out, curr->arg1, "$t0");
+                mgLoad(out, curr->arg2, "$t1");
+                fprintf(out, "    mult $t0, $t1\n");
+                fprintf(out, "    mflo $t2\n");
+                mgStore(out, curr->result, "$t2");
+            }
             break;
 
         case TAC_DIVIDE:
-            mgLoad(out, curr->arg1, "$t0");
-            mgLoad(out, curr->arg2, "$t1");
-            fprintf(out, "    div $t0, $t1\n");
-            fprintf(out, "    mflo $t2\n");
-            mgStore(out, curr->result, "$t2");
+            if (mgOperandType(curr->arg1) == TYPE_FLOAT ||
+                mgOperandType(curr->arg2) == TYPE_FLOAT ||
+                (curr->result && mgIsTemp(curr->result) && mgWillUseTempAsFloat(curr->next, curr->result))) {
+                mgLoadFloat(out, curr->arg1, "$f0");
+                mgLoadFloat(out, curr->arg2, "$f1");
+                fprintf(out, "    div.s $f2, $f0, $f1\n");
+                mgStoreFloat(out, curr->result, "$f2");
+            } else {
+                mgLoad(out, curr->arg1, "$t0");
+                mgLoad(out, curr->arg2, "$t1");
+                fprintf(out, "    div $t0, $t1\n");
+                fprintf(out, "    mflo $t2\n");
+                mgStore(out, curr->result, "$t2");
+            }
             break;
 
         case TAC_ARRAY_WRITE: {
             // arg1=array, arg2=index, result=value
             int vi = mgFind(curr->arg1);
             if (vi < 0) break;
-            mgLoad(out, curr->result, "$t0");  // value
+            VarType elemType = mgVars[vi].type;
             if (mgVars[vi].isLocalArray) {
-                if (mgIsConst(curr->arg2)) {
-                    fprintf(out, "    sw $t0, %d($fp)\n",
-                            mgVars[vi].offset + mgConstInt(curr->arg2) * 4);
+                if (elemType == TYPE_FLOAT) {
+                    mgLoadFloat(out, curr->result, "$f0");
+                    if (mgIsConst(curr->arg2)) {
+                        fprintf(out, "    s.s $f0, %d($fp)\n",
+                                mgVars[vi].offset + mgConstInt(curr->arg2) * 4);
+                    } else {
+                        mgLoad(out, curr->arg2, "$t1");
+                        fprintf(out, "    sll $t1, $t1, 2\n");
+                        fprintf(out, "    addi $t2, $fp, %d\n", mgVars[vi].offset);
+                        fprintf(out, "    add $t2, $t2, $t1\n");
+                        fprintf(out, "    s.s $f0, 0($t2)\n");
+                    }
                 } else {
-                    mgLoad(out, curr->arg2, "$t1");
-                    fprintf(out, "    sll $t1, $t1, 2\n");
-                    fprintf(out, "    addi $t2, $fp, %d\n", mgVars[vi].offset);
-                    fprintf(out, "    add $t2, $t2, $t1\n");
-                    fprintf(out, "    sw $t0, 0($t2)\n");
+                    mgLoad(out, curr->result, "$t0");  // value
+                    if (mgIsConst(curr->arg2)) {
+                        fprintf(out, "    sw $t0, %d($fp)\n",
+                                mgVars[vi].offset + mgConstInt(curr->arg2) * 4);
+                    } else {
+                        mgLoad(out, curr->arg2, "$t1");
+                        fprintf(out, "    sll $t1, $t1, 2\n");
+                        fprintf(out, "    addi $t2, $fp, %d\n", mgVars[vi].offset);
+                        fprintf(out, "    add $t2, $t2, $t1\n");
+                        fprintf(out, "    sw $t0, 0($t2)\n");
+                    }
                 }
             } else if (mgVars[vi].isParam) {
                 fprintf(out, "    lw $t3, %d($fp)\n", mgVars[vi].offset);
-                if (mgIsConst(curr->arg2))
-                    fprintf(out, "    sw $t0, %d($t3)\n", mgConstInt(curr->arg2) * 4);
-                else {
-                    mgLoad(out, curr->arg2, "$t1");
-                    fprintf(out, "    sll $t1, $t1, 2\n");
-                    fprintf(out, "    add $t3, $t3, $t1\n");
-                    fprintf(out, "    sw $t0, 0($t3)\n");
+                if (elemType == TYPE_FLOAT) {
+                    mgLoadFloat(out, curr->result, "$f0");
+                    if (mgIsConst(curr->arg2))
+                        fprintf(out, "    s.s $f0, %d($t3)\n", mgConstInt(curr->arg2) * 4);
+                    else {
+                        mgLoad(out, curr->arg2, "$t1");
+                        fprintf(out, "    sll $t1, $t1, 2\n");
+                        fprintf(out, "    add $t3, $t3, $t1\n");
+                        fprintf(out, "    s.s $f0, 0($t3)\n");
+                    }
+                } else {
+                    mgLoad(out, curr->result, "$t0");  // value
+                    if (mgIsConst(curr->arg2))
+                        fprintf(out, "    sw $t0, %d($t3)\n", mgConstInt(curr->arg2) * 4);
+                    else {
+                        mgLoad(out, curr->arg2, "$t1");
+                        fprintf(out, "    sll $t1, $t1, 2\n");
+                        fprintf(out, "    add $t3, $t3, $t1\n");
+                        fprintf(out, "    sw $t0, 0($t3)\n");
+                    }
                 }
             }
             break;
@@ -688,29 +886,58 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             // arg1=array, arg2=index, result=dest
             int vi = mgFind(curr->arg1);
             if (vi < 0) break;
+            VarType elemType = mgVars[vi].type;
             if (mgVars[vi].isLocalArray) {
-                if (mgIsConst(curr->arg2)) {
-                    fprintf(out, "    lw $t0, %d($fp)\n",
-                            mgVars[vi].offset + mgConstInt(curr->arg2) * 4);
+                if (elemType == TYPE_FLOAT) {
+                    if (mgIsConst(curr->arg2)) {
+                        fprintf(out, "    l.s $f0, %d($fp)\n",
+                                mgVars[vi].offset + mgConstInt(curr->arg2) * 4);
+                    } else {
+                        mgLoad(out, curr->arg2, "$t1");
+                        fprintf(out, "    sll $t1, $t1, 2\n");
+                        fprintf(out, "    addi $t2, $fp, %d\n", mgVars[vi].offset);
+                        fprintf(out, "    add $t2, $t2, $t1\n");
+                        fprintf(out, "    l.s $f0, 0($t2)\n");
+                    }
                 } else {
-                    mgLoad(out, curr->arg2, "$t1");
-                    fprintf(out, "    sll $t1, $t1, 2\n");
-                    fprintf(out, "    addi $t2, $fp, %d\n", mgVars[vi].offset);
-                    fprintf(out, "    add $t2, $t2, $t1\n");
-                    fprintf(out, "    lw $t0, 0($t2)\n");
+                    if (mgIsConst(curr->arg2)) {
+                        fprintf(out, "    lw $t0, %d($fp)\n",
+                                mgVars[vi].offset + mgConstInt(curr->arg2) * 4);
+                    } else {
+                        mgLoad(out, curr->arg2, "$t1");
+                        fprintf(out, "    sll $t1, $t1, 2\n");
+                        fprintf(out, "    addi $t2, $fp, %d\n", mgVars[vi].offset);
+                        fprintf(out, "    add $t2, $t2, $t1\n");
+                        fprintf(out, "    lw $t0, 0($t2)\n");
+                    }
                 }
             } else if (mgVars[vi].isParam) {
                 fprintf(out, "    lw $t3, %d($fp)\n", mgVars[vi].offset);
-                if (mgIsConst(curr->arg2))
-                    fprintf(out, "    lw $t0, %d($t3)\n", mgConstInt(curr->arg2) * 4);
-                else {
-                    mgLoad(out, curr->arg2, "$t1");
-                    fprintf(out, "    sll $t1, $t1, 2\n");
-                    fprintf(out, "    add $t3, $t3, $t1\n");
-                    fprintf(out, "    lw $t0, 0($t3)\n");
+                if (elemType == TYPE_FLOAT) {
+                    if (mgIsConst(curr->arg2))
+                        fprintf(out, "    l.s $f0, %d($t3)\n", mgConstInt(curr->arg2) * 4);
+                    else {
+                        mgLoad(out, curr->arg2, "$t1");
+                        fprintf(out, "    sll $t1, $t1, 2\n");
+                        fprintf(out, "    add $t3, $t3, $t1\n");
+                        fprintf(out, "    l.s $f0, 0($t3)\n");
+                    }
+                } else {
+                    if (mgIsConst(curr->arg2))
+                        fprintf(out, "    lw $t0, %d($t3)\n", mgConstInt(curr->arg2) * 4);
+                    else {
+                        mgLoad(out, curr->arg2, "$t1");
+                        fprintf(out, "    sll $t1, $t1, 2\n");
+                        fprintf(out, "    add $t3, $t3, $t1\n");
+                        fprintf(out, "    lw $t0, 0($t3)\n");
+                    }
                 }
             }
-            mgStore(out, curr->result, "$t0");
+            if (elemType == TYPE_FLOAT) {
+                mgStoreFloat(out, curr->result, "$f0");
+            } else {
+                mgStore(out, curr->result, "$t0");
+            }
             break;
         }
 
@@ -753,6 +980,7 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
         }
 
         case TAC_PRINT:
+        case TAC_WRITE:
             // Check if it's a string literal (starts with quote)
             if (curr->arg1 && curr->arg1[0] == '"') {
                 // Find string ID
@@ -767,16 +995,33 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
                     fprintf(out, "    la $a0, str_%d\n", strId);
                     fprintf(out, "    li $v0, 4\n");
                     fprintf(out, "    syscall\n");
+                    if (curr->op == TAC_PRINT) {
+                        fprintf(out, "    li $v0, 11\n");
+                        fprintf(out, "    li $a0, 10\n");
+                        fprintf(out, "    syscall\n");
+                    }
                 }
             } else {
-                // Integer/variable print followed by automatic newline
-                mgLoad(out, curr->arg1, "$a0");
-                fprintf(out, "    li $v0, 1\n");
-                fprintf(out, "    syscall\n");
-                /* Print newline character (syscall 11 = print_char, '\n' = 10) */
-                fprintf(out, "    li $v0, 11\n");
-                fprintf(out, "    li $a0, 10\n");
-                fprintf(out, "    syscall\n");
+                VarType pt = mgOperandType(curr->arg1);
+                if (pt == TYPE_FLOAT) {
+                    mgLoadFloat(out, curr->arg1, "$f12");
+                    fprintf(out, "    li $v0, 2\n");
+                    fprintf(out, "    syscall\n");
+                } else if (pt == TYPE_CHAR) {
+                    mgLoad(out, curr->arg1, "$a0");
+                    fprintf(out, "    li $v0, 11\n");
+                    fprintf(out, "    syscall\n");
+                } else {
+                    mgLoad(out, curr->arg1, "$a0");
+                    fprintf(out, "    li $v0, 1\n");
+                    fprintf(out, "    syscall\n");
+                }
+                if (curr->op == TAC_PRINT) {
+                    /* Print newline character (syscall 11 = print_char, '\n' = 10) */
+                    fprintf(out, "    li $v0, 11\n");
+                    fprintf(out, "    li $a0, 10\n");
+                    fprintf(out, "    syscall\n");
+                }
             }
             break;
 
@@ -812,13 +1057,25 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
             else
                 snprintf(callLab, sizeof(callLab), "fn_%s", curr->arg1);
             fprintf(out, "    jal %s\n", callLab);
-            if (curr->result) mgStore(out, curr->result, "$v0");
+            if (curr->result) {
+                if (getFunctionReturnType(curr->arg1) == TYPE_FLOAT) {
+                    mgStoreFloat(out, curr->result, "$f0");
+                } else {
+                    mgStore(out, curr->result, "$v0");
+                }
+            }
             callArgCount = 0;
             break;
         }
 
         case TAC_RETURN:
-            if (curr->arg1) mgLoad(out, curr->arg1, "$v0");
+            if (curr->arg1) {
+                if (mgOperandType(curr->arg1) == TYPE_FLOAT) {
+                    mgLoadFloat(out, curr->arg1, "$f0");
+                } else {
+                    mgLoad(out, curr->arg1, "$v0");
+                }
+            }
             if (inMain) {
                 fprintf(out, "    li $v0, 10\n");
                 fprintf(out, "    syscall\n");
@@ -914,6 +1171,24 @@ void generateMIPSFromOptimizedTAC2(const char* filename) {
     fclose(out);
 }
 
+void generateMIPSFromUnoptimizedTAC2(const char* filename) {
+    TACInstr* savedHead = optimizedList.head;
+    TACInstr* savedTail = optimizedList.tail;
+    optimizedList.head = tacList.head;
+    optimizedList.tail = tacList.tail;
+    generateMIPSFromOptimizedTAC2(filename);
+    optimizedList.head = savedHead;
+    optimizedList.tail = savedTail;
+}
+
+int getOptimizerConstFoldCount(void) {
+    return g_constFoldCount;
+}
+
+int getOptimizerDeadCodeElimCount(void) {
+    return g_deadCodeElimCount;
+}
+
 // Print optimized TAC instructions
 void printOptimizedTAC2() {
     printf("Optimized TAC Instructions:\n");
@@ -941,6 +1216,9 @@ void printOptimizedTAC2() {
                 break;
             case TAC_PRINT:
                 printf("%2d: PRINT %s          // Output value\n", instrNum++, curr->arg1);
+                break;
+            case TAC_WRITE:
+                printf("%2d: WRITE %s          // Output value without newline\n", instrNum++, curr->arg1);
                 break;
             case TAC_DECL:
                 printf("%2d: DECL %s           // Declare variable\n", instrNum++, curr->result);
@@ -1055,6 +1333,9 @@ void printOptimizedTACToFile2(const char* filename) {
             case TAC_PRINT:
                 fprintf(file, "%2d: PRINT %s          // Output value\n", instrNum++, curr->arg1);
                 break;
+            case TAC_WRITE:
+                fprintf(file, "%2d: WRITE %s          // Output value without newline\n", instrNum++, curr->arg1);
+                break;
             case TAC_DECL:
                 fprintf(file, "%2d: DECL %s           // Declare variable\n", instrNum++, curr->result);
                 break;
@@ -1168,6 +1449,9 @@ void printTACToFile2(const char* filename) {
                 break;
             case TAC_PRINT:
                 fprintf(file, "%2d: PRINT %s\n", instrNum++, curr->arg1);
+                break;
+            case TAC_WRITE:
+                fprintf(file, "%2d: WRITE %s\n", instrNum++, curr->arg1);
                 break;
             case TAC_DECL:
                 fprintf(file, "%2d: DECL %s\n", instrNum++, curr->result);

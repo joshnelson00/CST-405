@@ -31,6 +31,7 @@ typedef enum {
     NODE_ASSIGN,    /* Assignment statement (e.g., x = 10) */
     NODE_ARRAY_ASSIGN, /* Array assignment (e.g., arr[i] = 10) */
     NODE_PRINT,     /* Print statement (e.g., print(x)) */
+    NODE_WRITE,     /* Write statement (e.g., write(x)) */
     NODE_RETURN,    /* Return statement (e.g., return x) */
     NODE_FUNC,      /* Function definition (e.g., int f() {}) */
     NODE_PARAM,     /* Function parameter (e.g., int x) */
@@ -59,6 +60,9 @@ typedef enum {
 #define OP_GT 1003  /* > */
 #define OP_LE 1004  /* <= */
 #define OP_GE 1005  /* >= */
+#define OP_AND 1006 /* && */
+#define OP_OR  1007 /* || */
+#define OP_NOT 1008 /* ! (unary, uses left operand) */
 
 /* AST NODE STRUCTURE
  * Uses a union to efficiently store different node data
@@ -244,6 +248,7 @@ ASTNode* createArrayAccess(char* name, ASTNode* index);         /* Create array 
 ASTNode* createArrayAssign(char* name, ASTNode* index, ASTNode* value); /* Create array assignment node */
 ASTNode* createAssign(char* var, ASTNode* value);               /* Create assignment node */
 ASTNode* createPrint(ASTNode* expr);                            /* Create print node */
+ASTNode* createWrite(ASTNode* expr);                            /* Create write node */
 ASTNode* createReturn(ASTNode* expr);                           /* Create return node */
 ASTNode* createFunc(char* name, VarType return_type, ASTNode* params, ASTNode* body);  /* Create function node */
 ASTNode* createParam(char* name, VarType type);                  /* Create parameter node */
