@@ -95,6 +95,26 @@ static int runSpimCaptureWithTiming(const char* asmFile, const char* transcriptF
     return status;
 }
 
+static int percent_change_int(double baseline, double current) {
+    if (baseline <= 0.0) return 0;
+    double raw = ((baseline - current) * 100.0) / baseline;
+    if (raw >= 0.0) return (int)(raw + 0.5);
+    return (int)(raw - 0.5);
+}
+
+static void print_execution_summary(double simUnoptMs, double simOptMs) {
+    int reduction = percent_change_int(simUnoptMs, simOptMs);
+
+    printf("\n");
+    printf("┌──────────────────────────────────────────────────────────┐\n");
+    printf("│ EXECUTION TIME SUMMARY (SPIM)                            │\n");
+    printf("├──────────────────────────────────────────────────────────┤\n");
+    printf("│ Unoptimized run: %10.3f ms                               │\n", simUnoptMs);
+    printf("│ Optimized run:   %10.3f ms                               │\n", simOptMs);
+    printf("│ Runtime change:  %10d%%                                  │\n", reduction);
+    printf("└──────────────────────────────────────────────────────────┘\n");
+}
+
 static void write_benchmark_line(FILE* report, const char* phase, BenchmarkResult* bench) {
     if (!report || !phase || !bench) return;
     fprintf(report, "%s\n", phase);
@@ -346,9 +366,8 @@ int main(int argc, char* argv[]) {
         int temp_reduction = (temps_unopt > 0)
             ? (int)(((double)(temps_unopt - temps_opt) * 100.0) / (double)temps_unopt + 0.5)
             : 0;
-        int sim_reduction = (sim_unopt_ms > 0.0)
-            ? (int)(((sim_unopt_ms - sim_opt_ms) * 100.0) / sim_unopt_ms + 0.5)
-            : 0;
+        int sim_reduction = percent_change_int(sim_unopt_ms, sim_opt_ms);
+        int execution_comparable = (spim_status_unopt == 0 && spim_status == 0);
 
         fprintf(report, "\n===== Compiler Performance Report =====\n");
         fprintf(report, "Source file       : %s\n\n", argv[1]);
@@ -359,8 +378,22 @@ int main(int argc, char* argv[]) {
         fprintf(report, "Const folds      : %10d %12d\n", 0, const_folds);
         fprintf(report, "Dead code removed: %10d %12d\n", 0, dead_code_removed);
         fprintf(report, "Compile time (ms): %10.3f %12.3f\n", compile_unopt_ms, compile_opt_ms);
-        fprintf(report, "Sim time (ms)    : %10.3f %12.3f %10d%%\n", sim_unopt_ms, sim_opt_ms, sim_reduction);
+        if (execution_comparable) {
+            fprintf(report, "Execution time (ms): %7.3f %12.3f %10d%%\n", sim_unopt_ms, sim_opt_ms, sim_reduction);
+        } else {
+            fprintf(report, "Execution time (ms): %7.3f %12.3f %10s\n", sim_unopt_ms, sim_opt_ms, "N/A");
+            fprintf(report, "Execution comparison note: one or more SPIM runs failed; reduction is not comparable.\n");
+        }
         fprintf(report, "========================================\n");
+        fprintf(report, "Compiler-only total (optimized, ms): %.3f\n", compile_opt_ms);
+        fprintf(report, "Execution-only total (optimized, ms): %.3f\n", sim_opt_ms);
+        fprintf(report, "End-to-end total (optimized, ms): %.3f\n", compile_opt_ms + sim_opt_ms);
+        if (execution_comparable) {
+            print_execution_summary(sim_unopt_ms, sim_opt_ms);
+        } else {
+            printf("\n");
+            printf("Execution time summary unavailable: one or more SPIM runs failed.\n");
+        }
         printf("\n");
         
         // Clean up memory to prevent leaks
@@ -368,9 +401,9 @@ int main(int argc, char* argv[]) {
         // freeTACList(&tacList);
         // freeTACList(&optimizedList);
         
-        // Print total compilation time
-        end_benchmark(bench_total, "TOTAL COMPILATION TIME");
-        write_benchmark_line(report, "TOTAL COMPILATION TIME", bench_total);
+        // Print total pipeline time (compilation + transcripted execution)
+        end_benchmark(bench_total, "TOTAL PIPELINE TIME");
+        write_benchmark_line(report, "TOTAL PIPELINE TIME", bench_total);
         free(bench_total);
         
         printf("\n╔════════════════════════════════════════════════════════════╗\n");
